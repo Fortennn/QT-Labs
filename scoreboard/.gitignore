@@ -1,0 +1,45 @@
+# C++ objects and libs
+*.slo
+*.lo
+*.o
+*.a
+*.la
+*.lai
+*.so
+*.dll
+*.dylib
+
+# Qt-specific generated files
+object_script.*.Release
+object_script.*.Debug
+*_plugin_import.cpp
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+
+# Build directories (common convention, adjust as needed)
+/build
+/debug
+/release
+
+# QtCreator user-specific files (do not commit these)
+.qmake.cache
+.qmake.stash
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.autosave
+*.qmlproject.user
+*.qmlproject.user.*
+CMakeLists.txt.user*
+*creator.user*
+compile_commands.json
+
+# Makefiles and other build system files (if generated and not source)
+Makefile*
+*build-*
+target_wrapper.*
