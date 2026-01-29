@@ -1,0 +1,494 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>562</width>
+    <height>259</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget {
+    background-color: #0a0f0a;
+    color: #e0ffe0;
+    font-family: &quot;Segoe UI&quot;, &quot;SF Pro Display&quot;, -apple-system, sans-serif;
+    font-size: 14px;
+}
+
+QTabWidget {
+    border: none;
+    background-color: transparent;
+}
+
+QTabWidget::pane {
+    border: 1px solid #1a3d1a;
+    border-radius: 10px;
+    background-color: #0d130d;
+    padding: 8px;
+}
+
+QTabBar::tab {
+    background: #0f1a0f;
+    color: #80c080;
+    padding: 10px 20px;
+    margin-right: 4px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border: 1px solid #1a3d1a;
+    border-bottom: none;
+}
+
+QTabBar::tab:selected {
+    background: #1a3d1a;
+    color: #00ff00;
+    border-bottom: 2px solid #00ff00;
+}
+
+QTabBar::tab:hover:!selected {
+    background: #152015;
+    color: #a0d0a0;
+}
+
+QLineEdit {
+    background-color: #0f1a0f;
+    border: 1px solid #1a3d1a;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #e0ffe0;
+    selection-background-color: #00ff00;
+    selection-color: #000000;
+}
+
+QLineEdit:focus {
+    border: 1px solid #00ff00;
+    background-color: #152015;
+}
+
+QLineEdit:hover {
+    border: 1px solid #2a5d2a;
+}
+
+QComboBox {
+    background-color: #0f1a0f;
+    border: 1px solid #1a3d1a;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #e0ffe0;
+    min-width: 100px;
+}
+
+QComboBox:hover {
+    border: 1px solid #2a5d2a;
+    background-color: #152015;
+}
+
+QComboBox:focus {
+    border: 1px solid #00ff00;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 30px;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #80c080;
+    margin-right: 8px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #0f1a0f;
+    border: 1px solid #1a3d1a;
+    border-radius: 8px;
+    selection-background-color: #00ff00;
+    selection-color: #000000;
+    padding: 4px;
+}
+
+QPushButton {
+    background-color: #1a3d1a;
+    border: 1px solid #2a5d2a;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #e0ffe0;
+}
+
+QPushButton:hover {
+    background-color: #2a5d2a;
+    border: 1px solid #00ff00;
+}
+
+QPushButton:pressed {
+    background-color: #0f1a0f;
+}
+
+QScrollBar:vertical {
+    background: #0d130d;
+    width: 12px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical {
+    background: #1a3d1a;
+    border-radius: 6px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #2a5d2a;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background: #0d130d;
+    height: 12px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #1a3d1a;
+    border-radius: 6px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #2a5d2a;
+}</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout_2">
+    <item row="0" column="0">
+     <layout class="QGridLayout" name="gridLayout">
+      <item row="0" column="0">
+       <widget class="QTabWidget" name="tabWidget">
+        <property name="minimumSize">
+         <size>
+          <width>120</width>
+          <height>160</height>
+         </size>
+        </property>
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+        <widget class="QWidget" name="length">
+         <attribute name="title">
+          <string>Length</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout_4">
+          <item row="1" column="1">
+           <widget class="QComboBox" name="comboBox_2">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>126</width>
+              <height>0</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>kilometers (km)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>meters (m)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>inches (in)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>feet (ft)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>miles (mi)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <layout class="QGridLayout" name="gridLayout_3">
+            <item row="1" column="0">
+             <layout class="QVBoxLayout" name="verticalLayout">
+              <item>
+               <widget class="QLineEdit" name="lineEdit">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>100</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>35</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="comboBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>126</width>
+              <height>0</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>meters (m)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>kilometers (km)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>inches (in)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>feet (ft)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>miles (mi)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLineEdit" name="lineEdit_2">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>50</width>
+              <height>35</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="mass">
+         <attribute name="title">
+          <string>Mass</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout_6">
+          <item row="0" column="0">
+           <layout class="QGridLayout" name="gridLayout_5">
+            <item row="0" column="0">
+             <layout class="QVBoxLayout" name="verticalLayout_2">
+              <item>
+               <widget class="QLineEdit" name="lineEdit_3">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>35</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="comboBox_3">
+            <property name="minimumSize">
+             <size>
+              <width>126</width>
+              <height>0</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>kilograms (kg)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>pounds (lb)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>ounces (oz)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLineEdit" name="lineEdit_4">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>35</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="comboBox_4">
+            <property name="minimumSize">
+             <size>
+              <width>126</width>
+              <height>0</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>pounds (lb)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>kilograms (kg)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>ounces (oz)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="temperature">
+         <attribute name="title">
+          <string>Temperature</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout_8">
+          <item row="0" column="0">
+           <layout class="QGridLayout" name="gridLayout_7">
+            <item row="0" column="0">
+             <layout class="QVBoxLayout" name="verticalLayout_3">
+              <item>
+               <widget class="QLineEdit" name="lineEdit_5">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>35</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLineEdit" name="lineEdit_6">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>35</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="comboBox_5">
+            <property name="minimumSize">
+             <size>
+              <width>126</width>
+              <height>0</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>Celsius (°C)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Fahrenheit (°F)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Kelvin (K)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="comboBox_6">
+            <property name="minimumSize">
+             <size>
+              <width>126</width>
+              <height>0</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>Fahrenheit (°F)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Celsius (°C)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Kelvin (K)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
