@@ -1,5 +1,6 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
+#include "converter.h"
 
 #include <QMainWindow>
 
@@ -19,5 +20,12 @@ public:
 
 private:
     Ui::MainWindow *ui;
+    Converter *converter;
+
+    bool updating = false;
+
+private slots:
+    void updateConversion();
 };
+
 #endif // MAINWINDOW_H

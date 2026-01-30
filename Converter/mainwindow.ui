@@ -188,7 +188,7 @@ QScrollBar::handle:horizontal:hover {
          </attribute>
          <layout class="QGridLayout" name="gridLayout_4">
           <item row="1" column="1">
-           <widget class="QComboBox" name="comboBox_2">
+           <widget class="QComboBox" name="combo_length2">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
               <horstretch>0</horstretch>
@@ -203,12 +203,12 @@ QScrollBar::handle:horizontal:hover {
             </property>
             <item>
              <property name="text">
-              <string>kilometers (km)</string>
+              <string>meters (m)</string>
              </property>
             </item>
             <item>
              <property name="text">
-              <string>meters (m)</string>
+              <string>kilometers (km)</string>
              </property>
             </item>
             <item>
@@ -233,7 +233,7 @@ QScrollBar::handle:horizontal:hover {
             <item row="1" column="0">
              <layout class="QVBoxLayout" name="verticalLayout">
               <item>
-               <widget class="QLineEdit" name="lineEdit">
+               <widget class="QLineEdit" name="length1">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -253,7 +253,7 @@ QScrollBar::handle:horizontal:hover {
            </layout>
           </item>
           <item row="0" column="1">
-           <widget class="QComboBox" name="comboBox">
+           <widget class="QComboBox" name="combo_length1">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
               <horstretch>0</horstretch>
@@ -283,7 +283,7 @@ QScrollBar::handle:horizontal:hover {
             </item>
             <item>
              <property name="text">
-              <string>feet (ft)</string>
+              <string>foot (ft)</string>
              </property>
             </item>
             <item>
@@ -294,7 +294,7 @@ QScrollBar::handle:horizontal:hover {
            </widget>
           </item>
           <item row="1" column="0">
-           <widget class="QLineEdit" name="lineEdit_2">
+           <widget class="QLineEdit" name="length2">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
               <horstretch>0</horstretch>
@@ -321,7 +321,7 @@ QScrollBar::handle:horizontal:hover {
             <item row="0" column="0">
              <layout class="QVBoxLayout" name="verticalLayout_2">
               <item>
-               <widget class="QLineEdit" name="lineEdit_3">
+               <widget class="QLineEdit" name="mass1">
                 <property name="minimumSize">
                  <size>
                   <width>0</width>
@@ -335,7 +335,7 @@ QScrollBar::handle:horizontal:hover {
            </layout>
           </item>
           <item row="0" column="1">
-           <widget class="QComboBox" name="comboBox_3">
+           <widget class="QComboBox" name="combo_mass1">
             <property name="minimumSize">
              <size>
               <width>126</width>
@@ -360,7 +360,7 @@ QScrollBar::handle:horizontal:hover {
            </widget>
           </item>
           <item row="1" column="0">
-           <widget class="QLineEdit" name="lineEdit_4">
+           <widget class="QLineEdit" name="mass2">
             <property name="minimumSize">
              <size>
               <width>0</width>
@@ -370,7 +370,7 @@ QScrollBar::handle:horizontal:hover {
            </widget>
           </item>
           <item row="1" column="1">
-           <widget class="QComboBox" name="comboBox_4">
+           <widget class="QComboBox" name="combo_mass2">
             <property name="minimumSize">
              <size>
               <width>126</width>
@@ -379,12 +379,12 @@ QScrollBar::handle:horizontal:hover {
             </property>
             <item>
              <property name="text">
-              <string>pounds (lb)</string>
+              <string>kilograms (kg)</string>
              </property>
             </item>
             <item>
              <property name="text">
-              <string>kilograms (kg)</string>
+              <string>pounds (lb)</string>
              </property>
             </item>
             <item>
@@ -406,7 +406,7 @@ QScrollBar::handle:horizontal:hover {
             <item row="0" column="0">
              <layout class="QVBoxLayout" name="verticalLayout_3">
               <item>
-               <widget class="QLineEdit" name="lineEdit_5">
+               <widget class="QLineEdit" name="temp1">
                 <property name="minimumSize">
                  <size>
                   <width>0</width>
@@ -420,7 +420,7 @@ QScrollBar::handle:horizontal:hover {
            </layout>
           </item>
           <item row="1" column="0">
-           <widget class="QLineEdit" name="lineEdit_6">
+           <widget class="QLineEdit" name="temp2">
             <property name="minimumSize">
              <size>
               <width>0</width>
@@ -430,7 +430,7 @@ QScrollBar::handle:horizontal:hover {
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QComboBox" name="comboBox_5">
+           <widget class="QComboBox" name="combo_temp1">
             <property name="minimumSize">
              <size>
               <width>126</width>
@@ -455,7 +455,7 @@ QScrollBar::handle:horizontal:hover {
            </widget>
           </item>
           <item row="1" column="1">
-           <widget class="QComboBox" name="comboBox_6">
+           <widget class="QComboBox" name="combo_temp2">
             <property name="minimumSize">
              <size>
               <width>126</width>
@@ -464,12 +464,12 @@ QScrollBar::handle:horizontal:hover {
             </property>
             <item>
              <property name="text">
-              <string>Fahrenheit (°F)</string>
+              <string>Celsius (°C)</string>
              </property>
             </item>
             <item>
              <property name="text">
-              <string>Celsius (°C)</string>
+              <string>Fahrenheit (°F)</string>
              </property>
             </item>
             <item>
