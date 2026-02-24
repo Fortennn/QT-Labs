@@ -1,0 +1,29 @@
+# CMake build directories
+build*/
+cmake-build-*/
+.cmake/
+
+# Qt Creator
+*.user
+*.user.*
+*.pro.user
+.qtcreator/
+
+# Object files and binaries
+*.o
+*.obj
+*.exe
+*.out
+*.app
+
+# Generated UI headers
+ui_*.h
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
