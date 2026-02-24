@@ -32,16 +32,19 @@ public:
     QString typedPart()     const;
     QString remainingPart() const;
 
-    bool advance();
+    QChar   expectedChar()  const;
 
-    const QString      &fullText() const { return m_fullText; }
-    const QStringList  &lines()    const { return m_lines; }
+    bool advance();
+    bool goBack();
+
+    const QString     &fullText() const { return m_fullText; }
+    const QStringList &lines()    const { return m_lines; }
 
 private:
-    QString      m_fullText;
-    QStringList  m_lines;
-    int          m_lineIndex = 0;
-    int          m_charIndex = 0;
+    QString     m_fullText;
+    QStringList m_lines;
+    int         m_lineIndex = 0;
+    int         m_charIndex = 0;
 
     void clampIndices();
 };

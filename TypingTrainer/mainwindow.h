@@ -34,7 +34,6 @@ private slots:
     void onLessonChanged(int index);
     void onRandomLesson();
     void onReloadLessons();
-    void onStepForward();
 
 private:
     Ui::MainWindow       *ui;
@@ -45,11 +44,15 @@ private:
     TextModel             m_model;
     QVector<LessonEntry>  m_lessons;
 
+    bool  m_lastWasError = false;
+
     void setupConnections();
     void goToPage(int index);
     void scanLessons();
     void loadLesson(const QString &filePath);
     void updateTrainingUI();
+    void updateCurrentLineLabel();
+    void highlightNextKey();
 };
 
 #endif // MAINWINDOW_H

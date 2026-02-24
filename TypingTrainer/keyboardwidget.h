@@ -16,6 +16,9 @@ public:
     void pressKey(const QString &key);
     void releaseKey(const QString &key);
 
+    void highlightNextKey(const QString &ch);
+    void clearHighlight();
+
 private:
     void addKey(QGridLayout *layout,
                 const QString &label,
@@ -23,10 +26,14 @@ private:
                 int row, int col,
                 int colSpan = 1);
 
-    QMap<QString, QPushButton*> m_keys;
+    QString resolveKey(const QString &ch) const;
 
-    static const QString KEY_STYLE_NORMAL;
-    static const QString KEY_STYLE_PRESSED;
+    QMap<QString, QPushButton*> m_keys;
+    QString m_highlightedKey;
+
+    static const QString STYLE_NORMAL;
+    static const QString STYLE_PRESSED;
+    static const QString STYLE_HINT;
 };
 
 #endif // KEYBOARDWIDGET_H
