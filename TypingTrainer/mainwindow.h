@@ -7,11 +7,10 @@
 #include "keyboardwidget.h"
 #include "textdisplaywidget.h"
 #include "textmodel.h"
+#include "lessonloader.h"
 
 QT_BEGIN_NAMESPACE
-namespace Ui {
-class MainWindow;
-}
+namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 class MainWindow : public QMainWindow
@@ -32,28 +31,24 @@ private slots:
     void onReturnToMain();
     void onAbout();
     void onExit();
-
     void onLessonChanged(int index);
-
+    void onRandomLesson();
+    void onReloadLessons();
     void onStepForward();
 
 private:
-    Ui::MainWindow *ui;
-    KeyboardWidget    *m_keyboard;
-    TextDisplayWidget *m_textDisplay;
-
-    QLabel *m_lblPrevLine;
-    QLabel *m_lblCurrLine;
-
-    TextModel m_model;
-
-    QVector<Lesson> m_lessons;
+    Ui::MainWindow       *ui;
+    KeyboardWidget       *m_keyboard;
+    TextDisplayWidget    *m_textDisplay;
+    QLabel               *m_lblPrevLine;
+    QLabel               *m_lblCurrLine;
+    TextModel             m_model;
+    QVector<LessonEntry>  m_lessons;
 
     void setupConnections();
     void goToPage(int index);
-
-    void populateLessonCombo();
-
+    void scanLessons();
+    void loadLesson(const QString &filePath);
     void updateTrainingUI();
 };
 

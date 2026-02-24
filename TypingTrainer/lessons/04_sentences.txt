@@ -1,0 +1,6 @@
+Hello, World! This is a typing trainer application.
+Practice makes perfect, so keep going every day.
+Qt is a cross-platform application development framework.
+C++ offers high performance and precise control over memory.
+Good code is clear, correct, efficient, and maintainable.
+Every expert was once a beginner who refused to give up.

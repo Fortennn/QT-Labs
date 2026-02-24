@@ -17,12 +17,22 @@ qt_add_executable(TypingTrainer
     textdisplaywidget.cpp
     textmodel.h
     textmodel.cpp
+    lessonloader.h
+    lessonloader.cpp
 )
 
 target_link_libraries(TypingTrainer
     PRIVATE
         Qt::Core
         Qt::Widgets
+)
+
+# Copy lessons/ folder next to the executable after build
+add_custom_command(TARGET TypingTrainer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/lessons"
+        "$<TARGET_FILE_DIR:TypingTrainer>/lessons"
+    COMMENT "Copying lessons/ to build output directory"
 )
 
 include(GNUInstallDirs)
@@ -32,6 +42,8 @@ install(TARGETS TypingTrainer
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+install(DIRECTORY lessons DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 qt_generate_deploy_app_script(
     TARGET TypingTrainer

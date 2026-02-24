@@ -57,7 +57,7 @@ void KeyboardWidget::addKey(QGridLayout *layout,
     btn->setMinimumHeight(38);
     btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     btn->setStyleSheet(KEY_STYLE_NORMAL);
-    btn->setFocusPolicy(Qt::NoFocus);
+    btn->setFocusPolicy(Qt::NoFocus); // don't steal keyboard focus
     layout->addWidget(btn, row, col, 1, colSpan);
 
     m_keys[mapKey.toUpper()] = btn;
