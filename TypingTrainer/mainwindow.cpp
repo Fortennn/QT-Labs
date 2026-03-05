@@ -5,6 +5,7 @@
 #include <QFont>
 #include <QFileInfo>
 #include <QRandomGenerator>
+#include <QAction>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)

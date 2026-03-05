@@ -676,6 +676,7 @@
     </property>
     <addaction name="actionRandom"/>
     <addaction name="actionReload"/>
+    <addaction name="actionToggleSpeed"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -715,6 +716,14 @@
    </property>
    <property name="shortcut">
     <string>F5</string>
+   </property>
+  </action>
+  <action name="actionToggleSpeed">
+   <property name="text">
+    <string>Switch to WPM</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+M</string>
    </property>
   </action>
  </widget>

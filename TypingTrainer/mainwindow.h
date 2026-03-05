@@ -11,6 +11,7 @@
 #include "textdisplaywidget.h"
 #include "textmodel.h"
 #include "lessonloader.h"
+#include <QAction>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
