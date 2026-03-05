@@ -4,6 +4,9 @@
 #include <QMainWindow>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QTimer>
+#include <QElapsedTimer>
+#include <QSettings>
 #include "keyboardwidget.h"
 #include "textdisplaywidget.h"
 #include "textmodel.h"
@@ -34,6 +37,8 @@ private slots:
     void onLessonChanged(int index);
     void onRandomLesson();
     void onReloadLessons();
+    void onTimerTick();
+    void onToggleSpeedMode();
 
 private:
     Ui::MainWindow       *ui;
@@ -44,7 +49,16 @@ private:
     TextModel             m_model;
     QVector<LessonEntry>  m_lessons;
 
-    bool  m_lastWasError = false;
+    // Timer & time tracking
+    QTimer        *m_sessionTimer;
+    QElapsedTimer  m_elapsed;
+    qint64         m_elapsedMs = 0;
+
+    // Metrics counters
+    int  m_totalKeystrokes   = 0;
+    int  m_correctKeystrokes = 0;
+    bool m_lastWasError      = false;
+    bool m_speedModeWPM      = false; // false = CPM, true = WPM
 
     void setupConnections();
     void goToPage(int index);
@@ -53,6 +67,17 @@ private:
     void updateTrainingUI();
     void updateCurrentLineLabel();
     void highlightNextKey();
+    void updateStatsLabels();
+    void resetSessionMetrics();
+    void finishSession();
+
+    QString formatTime(qint64 ms) const;
+    double  calcSpeed(qint64 ms) const;
+    double  calcAccuracy() const;
+    QString speedLabel(double speed) const;
+
+    void loadSettings();
+    void saveSettings();
 };
 
 #endif // MAINWINDOW_H

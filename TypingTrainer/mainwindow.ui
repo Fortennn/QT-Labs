@@ -3,294 +3,501 @@
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
   <property name="geometry">
-   <rect><x>0</x><y>0</y><width>900</width><height>650</height></rect>
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>900</width>
+    <height>650</height>
+   </rect>
   </property>
-  <property name="windowTitle"><string>TypingTrainer</string></property>
   <property name="minimumSize">
-   <size><width>700</width><height>500</height></size>
+   <size>
+    <width>700</width>
+    <height>500</height>
+   </size>
   </property>
-
+  <property name="windowTitle">
+   <string>TypingTrainer</string>
+  </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout" name="mainLayout">
-    <property name="spacing"><number>0</number></property>
-    <property name="leftMargin"><number>0</number></property>
-    <property name="topMargin"><number>0</number></property>
-    <property name="rightMargin"><number>0</number></property>
-    <property name="bottomMargin"><number>0</number></property>
-
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
     <item>
      <widget class="QStackedWidget" name="stackScreens">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-        <horstretch>0</horstretch><verstretch>0</verstretch>
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <property name="currentIndex"><number>0</number></property>
-
-      <!-- PAGE 0: START -->
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
       <widget class="QWidget" name="pageStart">
        <layout class="QVBoxLayout" name="layoutStart">
-        <property name="spacing"><number>12</number></property>
-        <property name="leftMargin"><number>40</number></property>
-        <property name="topMargin"><number>30</number></property>
-        <property name="rightMargin"><number>40</number></property>
-        <property name="bottomMargin"><number>30</number></property>
-
+        <property name="spacing">
+         <number>12</number>
+        </property>
+        <property name="leftMargin">
+         <number>40</number>
+        </property>
+        <property name="topMargin">
+         <number>30</number>
+        </property>
+        <property name="rightMargin">
+         <number>40</number>
+        </property>
+        <property name="bottomMargin">
+         <number>30</number>
+        </property>
         <item>
          <spacer name="spacerStartTop">
-          <property name="orientation"><enum>Qt::Vertical</enum></property>
-          <property name="sizeHint" stdset="0"><size><width>0</width><height>30</height></size></property>
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>30</height>
+           </size>
+          </property>
          </spacer>
         </item>
-
         <item>
          <widget class="QLabel" name="lblSelectText">
-          <property name="text"><string>Select a text for the typing exercise:</string></property>
-          <property name="font"><font><pointsize>11</pointsize></font></property>
+          <property name="font">
+           <font>
+            <pointsize>11</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>Select a text for the typing exercise:</string>
+          </property>
          </widget>
         </item>
-
-        <!-- ComboBox row -->
         <item>
          <layout class="QHBoxLayout" name="layoutComboRow">
-          <property name="spacing"><number>8</number></property>
+          <property name="spacing">
+           <number>8</number>
+          </property>
           <item>
            <widget class="QComboBox" name="comboLesson">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-              <horstretch>0</horstretch><verstretch>0</verstretch>
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
              </sizepolicy>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="btnRandom">
-            <property name="text"><string>Random</string></property>
-            <property name="minimumSize"><size><width>90</width><height>0</height></size></property>
-            <property name="toolTip"><string>Pick a random lesson</string></property>
+            <property name="minimumSize">
+             <size>
+              <width>90</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>Pick a random lesson</string>
+            </property>
+            <property name="text">
+             <string>Random</string>
+            </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="btnReload">
-            <property name="text"><string>Reload</string></property>
-            <property name="minimumSize"><size><width>80</width><height>0</height></size></property>
-            <property name="toolTip"><string>Rescan the lessons/ folder</string></property>
+            <property name="minimumSize">
+             <size>
+              <width>80</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>Rescan the lessons/ folder</string>
+            </property>
+            <property name="text">
+             <string>Reload</string>
+            </property>
            </widget>
           </item>
          </layout>
         </item>
-
         <item>
          <widget class="QLabel" name="lblLessonDesc">
-          <property name="text"><string></string></property>
-          <property name="wordWrap"><bool>true</bool></property>
           <property name="styleSheet">
            <string>QLabel { color: #555555; font-style: italic; }</string>
           </property>
+          <property name="text">
+           <string/>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
          </widget>
         </item>
-
         <item>
          <spacer name="spacerStartMid">
-          <property name="orientation"><enum>Qt::Vertical</enum></property>
-          <property name="sizeHint" stdset="0"><size><width>0</width><height>20</height></size></property>
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>20</height>
+           </size>
+          </property>
          </spacer>
         </item>
-
         <item>
          <layout class="QHBoxLayout" name="layoutStartBtn">
           <item>
            <spacer name="spacerBtnLeft">
-            <property name="orientation"><enum>Qt::Horizontal</enum></property>
-            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Policy::Expanding</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
            </spacer>
           </item>
           <item>
            <widget class="QPushButton" name="btnStartTraining">
-            <property name="text"><string>Start Training</string></property>
-            <property name="minimumSize"><size><width>160</width><height>36</height></size></property>
             <property name="sizePolicy">
              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-              <horstretch>0</horstretch><verstretch>0</verstretch>
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
              </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>160</width>
+              <height>36</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Start Training</string>
             </property>
            </widget>
           </item>
           <item>
            <spacer name="spacerBtnRight">
-            <property name="orientation"><enum>Qt::Horizontal</enum></property>
-            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Policy::Expanding</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
            </spacer>
           </item>
          </layout>
         </item>
-
         <item>
          <spacer name="spacerStartBottom">
-          <property name="orientation"><enum>Qt::Vertical</enum></property>
-          <property name="sizeHint" stdset="0"><size><width>0</width><height>30</height></size></property>
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>30</height>
+           </size>
+          </property>
          </spacer>
         </item>
-
        </layout>
       </widget>
-
-      <!-- PAGE 1: TRAINING -->
       <widget class="QWidget" name="pageTraining">
        <layout class="QVBoxLayout" name="layoutTraining">
-        <property name="spacing"><number>8</number></property>
-        <property name="leftMargin"><number>10</number></property>
-        <property name="topMargin"><number>8</number></property>
-        <property name="rightMargin"><number>10</number></property>
-        <property name="bottomMargin"><number>8</number></property>
-
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>8</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <property name="bottomMargin">
+         <number>8</number>
+        </property>
         <item>
-         <widget class="QWidget" name="statsPanel">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-            <horstretch>0</horstretch><verstretch>0</verstretch>
-           </sizepolicy>
+         <layout class="QHBoxLayout" name="layoutStats">
+          <property name="spacing">
+           <number>16</number>
           </property>
-          <property name="minimumHeight"><number>36</number></property>
-          <layout class="QHBoxLayout" name="layoutStats">
-           <property name="leftMargin"><number>6</number></property>
-           <property name="topMargin"><number>4</number></property>
-           <property name="rightMargin"><number>6</number></property>
-           <property name="bottomMargin"><number>4</number></property>
-           <property name="spacing"><number>16</number></property>
-           <item>
-            <widget class="QLabel" name="lblSessionTime">
-             <property name="text"><string>⏱ Time: 00:00</string></property>
-             <property name="font"><font><pointsize>10</pointsize></font></property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QFrame" name="sep1">
-             <property name="frameShape"><enum>QFrame::VLine</enum></property>
-             <property name="frameShadow"><enum>QFrame::Sunken</enum></property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="lblSessionSpeed">
-             <property name="text"><string>⌨ Speed: 0 CPM</string></property>
-             <property name="font"><font><pointsize>10</pointsize></font></property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QFrame" name="sep2">
-             <property name="frameShape"><enum>QFrame::VLine</enum></property>
-             <property name="frameShadow"><enum>QFrame::Sunken</enum></property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="lblSessionAccuracy">
-             <property name="text"><string>✓ Accuracy: 100%</string></property>
-             <property name="font"><font><pointsize>10</pointsize></font></property>
-            </widget>
-           </item>
-           <item>
-            <spacer name="spacerStats">
-             <property name="orientation"><enum>Qt::Horizontal</enum></property>
-             <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
-            </spacer>
-           </item>
-           <item>
-            <widget class="QProgressBar" name="progressSession">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-               <horstretch>0</horstretch><verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="minimumWidth"><number>120</number></property>
-             <property name="maximumHeight"><number>18</number></property>
-             <property name="value"><number>0</number></property>
-             <property name="textVisible"><bool>false</bool></property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
+          <property name="leftMargin">
+           <number>6</number>
+          </property>
+          <property name="topMargin">
+           <number>4</number>
+          </property>
+          <property name="rightMargin">
+           <number>6</number>
+          </property>
+          <property name="bottomMargin">
+           <number>4</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="lblSessionTime">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>⏱ Time: 00:00</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="sep1">
+            <property name="frameShape">
+             <enum>QFrame::Shape::VLine</enum>
+            </property>
+            <property name="frameShadow">
+             <enum>QFrame::Shadow::Sunken</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblSessionSpeed">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>⌨ Speed: 0 CPM</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="sep2">
+            <property name="frameShape">
+             <enum>QFrame::Shape::VLine</enum>
+            </property>
+            <property name="frameShadow">
+             <enum>QFrame::Shadow::Sunken</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblSessionAccuracy">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>✓ Accuracy: 100%</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="spacerStats">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Policy::Expanding</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QProgressBar" name="progressSession">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="value">
+             <number>0</number>
+            </property>
+            <property name="textVisible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
-
         <item>
          <widget class="QFrame" name="statsDivider">
-          <property name="frameShape"><enum>QFrame::HLine</enum></property>
-          <property name="frameShadow"><enum>QFrame::Sunken</enum></property>
+          <property name="frameShape">
+           <enum>QFrame::Shape::HLine</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Shadow::Sunken</enum>
+          </property>
          </widget>
         </item>
-
         <item>
          <widget class="QWidget" name="textDisplayPlaceholder" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-            <horstretch>0</horstretch><verstretch>0</verstretch>
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="minimumSize"><size><width>0</width><height>120</height></size></property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>120</height>
+           </size>
+          </property>
          </widget>
         </item>
-
         <item>
          <widget class="QFrame" name="kbDivider">
-          <property name="frameShape"><enum>QFrame::HLine</enum></property>
-          <property name="frameShadow"><enum>QFrame::Sunken</enum></property>
+          <property name="frameShape">
+           <enum>QFrame::Shape::HLine</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Shadow::Sunken</enum>
+          </property>
          </widget>
         </item>
-
         <item>
          <widget class="QWidget" name="keyboardPlaceholder" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-            <horstretch>0</horstretch><verstretch>0</verstretch>
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="minimumSize"><size><width>0</width><height>210</height></size></property>
-          <property name="maximumSize"><size><width>16777215</width><height>230</height></size></property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>210</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>230</height>
+           </size>
+          </property>
          </widget>
         </item>
-
        </layout>
       </widget>
-
-      <!-- PAGE 2: RESULTS -->
       <widget class="QWidget" name="pageResults">
        <layout class="QVBoxLayout" name="layoutResults">
-        <property name="spacing"><number>16</number></property>
-        <property name="leftMargin"><number>40</number></property>
-        <property name="topMargin"><number>30</number></property>
-        <property name="rightMargin"><number>40</number></property>
-        <property name="bottomMargin"><number>30</number></property>
-
+        <property name="spacing">
+         <number>16</number>
+        </property>
+        <property name="leftMargin">
+         <number>40</number>
+        </property>
+        <property name="topMargin">
+         <number>30</number>
+        </property>
+        <property name="rightMargin">
+         <number>40</number>
+        </property>
+        <property name="bottomMargin">
+         <number>30</number>
+        </property>
         <item>
          <widget class="QLabel" name="lblResultsTitle">
-          <property name="text"><string>Session Results</string></property>
-          <property name="font"><font><pointsize>16</pointsize><bold>true</bold></font></property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Session Results</string>
+          </property>
          </widget>
         </item>
-
         <item>
          <widget class="QGroupBox" name="groupResults">
-          <property name="title"><string/></property>
+          <property name="title">
+           <string/>
+          </property>
           <layout class="QHBoxLayout" name="layoutResultsCards">
-           <property name="spacing"><number>20</number></property>
-           <property name="leftMargin"><number>20</number></property>
-           <property name="topMargin"><number>20</number></property>
-           <property name="rightMargin"><number>20</number></property>
-           <property name="bottomMargin"><number>20</number></property>
+           <property name="spacing">
+            <number>20</number>
+           </property>
+           <property name="leftMargin">
+            <number>20</number>
+           </property>
+           <property name="topMargin">
+            <number>20</number>
+           </property>
+           <property name="rightMargin">
+            <number>20</number>
+           </property>
+           <property name="bottomMargin">
+            <number>20</number>
+           </property>
            <item>
             <widget class="QGroupBox" name="cardTime">
-             <property name="title"><string>⏱ Time</string></property>
-             <property name="alignment"><set>Qt::AlignHCenter</set></property>
              <property name="sizePolicy">
               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-               <horstretch>0</horstretch><verstretch>0</verstretch>
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="title">
+              <string>⏱ Time</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignHCenter</set>
              </property>
              <layout class="QVBoxLayout" name="layoutCardTime">
               <item>
                <widget class="QLabel" name="lblResultTime">
-                <property name="text"><string>00:00</string></property>
-                <property name="font"><font><pointsize>24</pointsize><bold>true</bold></font></property>
-                <property name="alignment"><set>Qt::AlignCenter</set></property>
+                <property name="font">
+                 <font>
+                  <pointsize>24</pointsize>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>00:00</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                </property>
                </widget>
               </item>
              </layout>
@@ -298,19 +505,33 @@
            </item>
            <item>
             <widget class="QGroupBox" name="cardSpeed">
-             <property name="title"><string>⌨ Speed</string></property>
-             <property name="alignment"><set>Qt::AlignHCenter</set></property>
              <property name="sizePolicy">
               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-               <horstretch>0</horstretch><verstretch>0</verstretch>
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="title">
+              <string>⌨ Speed</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignHCenter</set>
              </property>
              <layout class="QVBoxLayout" name="layoutCardSpeed">
               <item>
                <widget class="QLabel" name="lblResultSpeed">
-                <property name="text"><string>0 CPM</string></property>
-                <property name="font"><font><pointsize>24</pointsize><bold>true</bold></font></property>
-                <property name="alignment"><set>Qt::AlignCenter</set></property>
+                <property name="font">
+                 <font>
+                  <pointsize>24</pointsize>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>0 CPM</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                </property>
                </widget>
               </item>
              </layout>
@@ -318,19 +539,33 @@
            </item>
            <item>
             <widget class="QGroupBox" name="cardAccuracy">
-             <property name="title"><string>✓ Accuracy</string></property>
-             <property name="alignment"><set>Qt::AlignHCenter</set></property>
              <property name="sizePolicy">
               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-               <horstretch>0</horstretch><verstretch>0</verstretch>
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="title">
+              <string>✓ Accuracy</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignHCenter</set>
              </property>
              <layout class="QVBoxLayout" name="layoutCardAccuracy">
               <item>
                <widget class="QLabel" name="lblResultAccuracy">
-                <property name="text"><string>100%</string></property>
-                <property name="font"><font><pointsize>24</pointsize><bold>true</bold></font></property>
-                <property name="alignment"><set>Qt::AlignCenter</set></property>
+                <property name="font">
+                 <font>
+                  <pointsize>24</pointsize>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>100%</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                </property>
                </widget>
               </item>
              </layout>
@@ -339,91 +574,149 @@
           </layout>
          </widget>
         </item>
-
         <item>
          <spacer name="spacerResults">
-          <property name="orientation"><enum>Qt::Vertical</enum></property>
-          <property name="sizeHint" stdset="0"><size><width>0</width><height>40</height></size></property>
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>40</height>
+           </size>
+          </property>
          </spacer>
         </item>
-
         <item>
          <layout class="QHBoxLayout" name="layoutResultsBtns">
           <item>
            <spacer name="spacerResultsBtnLeft">
-            <property name="orientation"><enum>Qt::Horizontal</enum></property>
-            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Policy::Expanding</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
            </spacer>
           </item>
           <item>
            <widget class="QPushButton" name="btnRestart">
-            <property name="text"><string>Restart Training</string></property>
-            <property name="minimumSize"><size><width>150</width><height>36</height></size></property>
+            <property name="minimumSize">
+             <size>
+              <width>150</width>
+              <height>36</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Restart Training</string>
+            </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="btnReturnToMain">
-            <property name="text"><string>Return to Main</string></property>
-            <property name="minimumSize"><size><width>150</width><height>36</height></size></property>
+            <property name="minimumSize">
+             <size>
+              <width>150</width>
+              <height>36</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Return to Main</string>
+            </property>
            </widget>
           </item>
           <item>
            <spacer name="spacerResultsBtnRight">
-            <property name="orientation"><enum>Qt::Horizontal</enum></property>
-            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Policy::Expanding</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
            </spacer>
           </item>
          </layout>
         </item>
-
        </layout>
       </widget>
-
      </widget>
     </item>
    </layout>
   </widget>
-
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
-    <rect><x>0</x><y>0</y><width>900</width><height>26</height></rect>
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>900</width>
+     <height>26</height>
+    </rect>
    </property>
    <widget class="QMenu" name="menuFile">
-    <property name="title"><string>File</string></property>
+    <property name="title">
+     <string>File</string>
+    </property>
     <addaction name="actionExit"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
-    <property name="title"><string>Settings</string></property>
+    <property name="title">
+     <string>Settings</string>
+    </property>
     <addaction name="actionRandom"/>
     <addaction name="actionReload"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
-    <property name="title"><string>Help</string></property>
+    <property name="title">
+     <string>Help</string>
+    </property>
     <addaction name="actionAbout"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuSettings"/>
    <addaction name="menuHelp"/>
   </widget>
-
   <widget class="QStatusBar" name="statusBar"/>
-
   <action name="actionExit">
-   <property name="text"><string>Exit</string></property>
-   <property name="shortcut"><string>Ctrl+Q</string></property>
+   <property name="text">
+    <string>Exit</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
   </action>
   <action name="actionAbout">
-   <property name="text"><string>About</string></property>
+   <property name="text">
+    <string>About</string>
+   </property>
   </action>
   <action name="actionRandom">
-   <property name="text"><string>Random Lesson</string></property>
-   <property name="shortcut"><string>Ctrl+Shift+R</string></property>
+   <property name="text">
+    <string>Random Lesson</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+R</string>
+   </property>
   </action>
   <action name="actionReload">
-   <property name="text"><string>Reload Lessons</string></property>
-   <property name="shortcut"><string>F5</string></property>
+   <property name="text">
+    <string>Reload Lessons</string>
+   </property>
+   <property name="shortcut">
+    <string>F5</string>
+   </property>
   </action>
-
  </widget>
  <resources/>
  <connections/>

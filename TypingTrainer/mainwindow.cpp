@@ -41,13 +41,19 @@ MainWindow::MainWindow(QWidget *parent)
     tdLayout->insertWidget(0, m_lblPrevLine);
     tdLayout->insertWidget(1, m_lblCurrLine);
 
+    m_sessionTimer = new QTimer(this);
+    m_sessionTimer->setInterval(500);
+    connect(m_sessionTimer, &QTimer::timeout, this, &MainWindow::onTimerTick);
+
     setupConnections();
     scanLessons();
+    loadSettings();
     goToPage(0);
 }
 
 MainWindow::~MainWindow()
 {
+    saveSettings();
     delete ui;
 }
 
@@ -62,6 +68,7 @@ void MainWindow::setupConnections()
     connect(ui->actionAbout,       &QAction::triggered,   this, &MainWindow::onAbout);
     connect(ui->actionRandom,      &QAction::triggered,   this, &MainWindow::onRandomLesson);
     connect(ui->actionReload,      &QAction::triggered,   this, &MainWindow::onReloadLessons);
+    connect(ui->actionToggleSpeed, &QAction::triggered,   this, &MainWindow::onToggleSpeedMode);
     connect(ui->comboLesson, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onLessonChanged);
 }
@@ -139,11 +146,11 @@ void MainWindow::updateCurrentLineLabel()
     m_lblPrevLine->setText(prev.isEmpty() ? QString() :
                            htmlSpan(prev, "color:#aaaaaa;"));
 
-    QString line     = m_model.currentLine();
-    int     ci       = m_model.charIndex();
-    QString typed    = line.left(ci);
-    QString curChar  = (ci < line.size()) ? line.mid(ci, 1) : QString();
-    QString rest     = (ci + 1 < line.size()) ? line.mid(ci + 1) : QString();
+    QString line    = m_model.currentLine();
+    int     ci      = m_model.charIndex();
+    QString typed   = line.left(ci);
+    QString curChar = (ci < line.size()) ? line.mid(ci, 1) : QString();
+    QString rest    = (ci + 1 < line.size()) ? line.mid(ci + 1) : QString();
 
     QString html;
     html += htmlSpan(typed, "color:#1a7a1a; background:#d4f5d4;");
@@ -172,7 +179,12 @@ void MainWindow::updateTrainingUI()
     m_textDisplay->setText(m_model.fullText());
     m_textDisplay->setTypedCount(globalOffset);
 
+    int totalChars = m_model.fullText().size();
+    if (totalChars > 0)
+        ui->progressSession->setValue(globalOffset * 100 / totalChars);
+
     highlightNextKey();
+    updateStatsLabels();
 }
 
 void MainWindow::highlightNextKey()
@@ -185,10 +197,89 @@ void MainWindow::highlightNextKey()
     m_keyboard->highlightNextKey(QString(expected));
 }
 
+QString MainWindow::formatTime(qint64 ms) const
+{
+    qint64 totalSec = ms / 1000;
+    int minutes = static_cast<int>(totalSec / 60);
+    int seconds = static_cast<int>(totalSec % 60);
+    return QString("%1:%2")
+        .arg(minutes, 2, 10, QChar('0'))
+        .arg(seconds, 2, 10, QChar('0'));
+}
+
+double MainWindow::calcSpeed(qint64 ms) const
+{
+    if (ms < 1000) return 0.0;
+    double minutes = ms / 60000.0;
+    double cpm = m_correctKeystrokes / minutes;
+    if (m_speedModeWPM)
+        return cpm / 5.0;
+    return cpm;
+}
+
+double MainWindow::calcAccuracy() const
+{
+    if (m_totalKeystrokes == 0) return 100.0;
+    return 100.0 * m_correctKeystrokes / m_totalKeystrokes;
+}
+
+QString MainWindow::speedLabel(double speed) const
+{
+    int rounded = static_cast<int>(speed + 0.5);
+    return QString::number(rounded) + (m_speedModeWPM ? " WPM" : " CPM");
+}
+
+void MainWindow::updateStatsLabels()
+{
+    qint64 ms = m_elapsedMs;
+    if (m_sessionTimer->isActive() && m_elapsed.isValid())
+        ms = m_elapsed.elapsed();
+
+    ui->lblSessionTime->setText("⏱ Time: " + formatTime(ms));
+
+    double speed = calcSpeed(ms);
+    ui->lblSessionSpeed->setText("⌨ Speed: " + speedLabel(speed));
+
+    double acc = calcAccuracy();
+    ui->lblSessionAccuracy->setText(QString("✓ Accuracy: %1%").arg(qRound(acc)));
+}
+
+void MainWindow::resetSessionMetrics()
+{
+    m_totalKeystrokes    = 0;
+    m_correctKeystrokes  = 0;
+    m_elapsedMs          = 0;
+    m_lastWasError       = false;
+    ui->progressSession->setValue(0);
+    updateStatsLabels();
+}
+
+void MainWindow::finishSession()
+{
+    m_sessionTimer->stop();
+    m_elapsedMs = m_elapsed.elapsed();
+
+    double speed = calcSpeed(m_elapsedMs);
+    double acc   = calcAccuracy();
+
+    ui->lblResultTime->setText(formatTime(m_elapsedMs));
+    ui->lblResultSpeed->setText(speedLabel(speed));
+    ui->lblResultAccuracy->setText(QString("%1%").arg(qRound(acc)));
+
+    goToPage(2);
+    statusBar()->showMessage("Session complete!");
+}
+
+void MainWindow::onTimerTick()
+{
+    updateStatsLabels();
+}
+
 void MainWindow::onLessonChanged(int index)
 {
     if (index < 0 || index >= m_lessons.size()) return;
     loadLesson(m_lessons[index].filePath);
+    saveSettings();
 }
 
 void MainWindow::onRandomLesson()
@@ -203,24 +294,39 @@ void MainWindow::onReloadLessons()
     scanLessons();
 }
 
+void MainWindow::onToggleSpeedMode()
+{
+    m_speedModeWPM = !m_speedModeWPM;
+    ui->actionToggleSpeed->setText(m_speedModeWPM ? "Switch to CPM" : "Switch to WPM");
+    updateStatsLabels();
+    saveSettings();
+}
+
 void MainWindow::onStartTraining()
 {
     m_model.reset();
-    m_lastWasError = false;
+    resetSessionMetrics();
     goToPage(1);
     updateTrainingUI();
+    m_elapsed.start();
+    m_sessionTimer->start();
 }
 
 void MainWindow::onRestartTraining()
 {
+    m_sessionTimer->stop();
     m_model.reset();
-    m_lastWasError = false;
+    resetSessionMetrics();
     goToPage(1);
     updateTrainingUI();
+    m_elapsed.start();
+    m_sessionTimer->start();
 }
 
 void MainWindow::onReturnToMain()
 {
+    m_sessionTimer->stop();
+    m_elapsedMs = 0;
     m_keyboard->clearHighlight();
     goToPage(0);
 }
@@ -228,12 +334,7 @@ void MainWindow::onReturnToMain()
 void MainWindow::onAbout()
 {
     QMessageBox::about(this, "About TypingTrainer",
-                       "TypingTrainer v4.0\n\n"
-                       "Practical Work #9 — Keyboard Events & Highlighting\n\n"
-                       "Green  = correct typed characters\n"
-                       "Yellow = current character to type\n"
-                       "Red    = wrong key pressed\n"
-                       "Keyboard hint = green key to press next");
+                       "TypingTrainer v4.0\n\n");
 }
 
 void MainWindow::onExit() { close(); }
@@ -273,7 +374,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     m_keyboard->pressKey(text);
 
     QChar expected = m_model.expectedChar();
-
     bool isEnterNeeded = expected.isNull() && !m_model.isFinished();
 
     if (isEnterNeeded) {
@@ -285,7 +385,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
+    m_totalKeystrokes++;
     if (text[0] == expected) {
+        m_correctKeystrokes++;
         m_lastWasError = false;
         m_model.advance();
     } else {
@@ -296,7 +398,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 
     if (m_model.isFinished()) {
         m_keyboard->clearHighlight();
-        statusBar()->showMessage("Lesson finished! Press Restart to go again.");
+        finishSession();
     }
 }
 
@@ -313,4 +415,37 @@ void MainWindow::keyReleaseEvent(QKeyEvent *event)
         else if (!text.isEmpty())          m_keyboard->releaseKey(text);
     }
     QMainWindow::keyReleaseEvent(event);
+}
+
+void MainWindow::loadSettings()
+{
+    QSettings settings("TypingTrainer", "TypingTrainer");
+
+    QString mode = settings.value("ui/speedMode", "CPM").toString();
+    m_speedModeWPM = (mode == "WPM");
+    ui->actionToggleSpeed->setText(m_speedModeWPM ? "Switch to CPM" : "Switch to WPM");
+
+    QString lastLesson = settings.value("ui/lastLesson", "").toString();
+    if (!lastLesson.isEmpty() && !m_lessons.isEmpty()) {
+        for (int i = 0; i < m_lessons.size(); ++i) {
+            if (m_lessons[i].filePath == lastLesson ||
+                m_lessons[i].title == lastLesson) {
+                QSignalBlocker blocker(ui->comboLesson);
+                ui->comboLesson->setCurrentIndex(i);
+                loadLesson(m_lessons[i].filePath);
+                break;
+            }
+        }
+    }
+}
+
+void MainWindow::saveSettings()
+{
+    QSettings settings("TypingTrainer", "TypingTrainer");
+
+    settings.setValue("ui/speedMode", m_speedModeWPM ? "WPM" : "CPM");
+
+    int idx = ui->comboLesson->currentIndex();
+    if (idx >= 0 && idx < m_lessons.size())
+        settings.setValue("ui/lastLesson", m_lessons[idx].filePath);
 }
