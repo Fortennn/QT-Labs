@@ -1,0 +1,14 @@
+build*/
+.qt/
+*.user
+*.autosave
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.o
+*.a
+*.so
+moc_*
+ui_*
+qrc_*
