@@ -1,33 +1,32 @@
 #pragma once
 
 #include <QDialog>
+#include "ticket.h"
 
-QT_BEGIN_NAMESPACE
-namespace Ui { class TicketDialog; }
-QT_END_NAMESPACE
+namespace Ui {
+class TicketDialog;
+}
 
-class TicketDialog : public QDialog
-{
+class TicketDialog : public QDialog {
     Q_OBJECT
 
 public:
-    enum Mode { ModeView, ModeEdit, ModeNew };
+    enum Mode { ModeView, ModeAdd, ModeEdit };
 
-    explicit TicketDialog(QWidget *parent = nullptr);
+    explicit TicketDialog(Mode mode, QWidget *parent = nullptr);
     ~TicketDialog();
 
-    void setMode(Mode mode);
+    void    setTicket(const Ticket &ticket);
+    Ticket  ticket() const;
 
 private slots:
     void onEditClicked();
-    void onSaveClicked();
-    void onCancelClicked();
 
 private:
-    Ui::TicketDialog *ui;
-    Mode m_mode;
-    Mode m_previousMode;
+    void setupReadOnly(bool readOnly);
 
-    void applyMode();
-    void setFieldsReadOnly(bool readOnly);
+    Ui::TicketDialog *ui;
+    Mode              m_mode;
+    int               m_id = 0;
+    QDateTime         m_createdAt;
 };

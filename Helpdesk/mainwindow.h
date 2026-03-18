@@ -1,36 +1,33 @@
 #pragma once
 
 #include <QMainWindow>
-#include <QStandardItemModel>
+#include "tickettablemodel.h"
 
-QT_BEGIN_NAMESPACE
-namespace Ui { class MainWindow; }
-QT_END_NAMESPACE
+namespace Ui {
+class MainWindow;
+}
 
-class TicketDialog;
-
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
-    void onNew();
-    void onView();
-    void onEdit();
-    void onDelete();
+    void onNewTicket();
+    void onViewTicket();
+    void onEditTicket();
+    void onDeleteTicket();
     void onRefresh();
-    void onAbout();
-    void onSelectionChanged();
+    void updateActions();
+    void onTableDoubleClicked(const QModelIndex &index);
 
 private:
-    Ui::MainWindow *ui;
-    QStandardItemModel *m_model;
-    TicketDialog *m_ticketDialog;
+    void setupTable();
+    void populateSampleData();
+    int  selectedRow() const;
 
-    void setupModel();
-    void updateActionsState();
+    Ui::MainWindow    *ui;
+    TicketTableModel  *m_model;
 };

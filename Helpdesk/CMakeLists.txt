@@ -1,38 +1,30 @@
-cmake_minimum_required(VERSION 3.16)
-project(Helpdesk VERSION 0.1 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.19)
+project(Helpdesk VERSION 1.0 LANGUAGES CXX)
 
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-set(PROJECT_SOURCES
+qt_add_executable(Helpdesk
     main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    mainwindow.ui
-    ticketdialog.cpp
+    ticket.h
+    tickettablemodel.h
+    tickettablemodel.cpp
     ticketdialog.h
+    ticketdialog.cpp
+    mainwindow.h
+    mainwindow.cpp
+    mainwindow.ui
     ticketdialog.ui
 )
 
-if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(Helpdesk
-        MANUAL_FINALIZATION
-        ${PROJECT_SOURCES}
-    )
-else()
-    add_executable(Helpdesk
-        ${PROJECT_SOURCES}
-    )
-endif()
+target_link_libraries(Helpdesk PRIVATE Qt6::Widgets)
 
-target_link_libraries(Helpdesk PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
-
-if(${QT_VERSION_MAJOR} EQUAL 6)
-    qt_finalize_executable(Helpdesk)
-endif()
+set_target_properties(Helpdesk PROPERTIES
+    WIN32_EXECUTABLE TRUE
+    MACOSX_BUNDLE TRUE
+)

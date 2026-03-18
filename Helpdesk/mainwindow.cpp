@@ -1,30 +1,50 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "ticketdialog.h"
+
+#include <QHeaderView>
 #include <QMessageBox>
+#include <QToolBar>
+#include <QLabel>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , m_model(nullptr)
-    , m_ticketDialog(nullptr)
+    , m_model(new TicketTableModel(this))
 {
     ui->setupUi(this);
-    setupModel();
-    updateActionsState();
 
-    connect(ui->actionNew, &QAction::triggered, this, &MainWindow::onNew);
-    connect(ui->actionView, &QAction::triggered, this, &MainWindow::onView);
-    connect(ui->actionEdit, &QAction::triggered, this, &MainWindow::onEdit);
-    connect(ui->actionDelete, &QAction::triggered, this, &MainWindow::onDelete);
+    setupTable();
+    populateSampleData();
+
+    QToolBar *tb = addToolBar("Main");
+    tb->setMovable(false);
+    tb->addAction(ui->actionNew);
+    tb->addAction(ui->actionView);
+    tb->addAction(ui->actionEdit);
+    tb->addAction(ui->actionDelete);
+    tb->addSeparator();
+    tb->addAction(ui->actionRefresh);
+
+    connect(ui->actionNew,     &QAction::triggered, this, &MainWindow::onNewTicket);
+    connect(ui->actionView,    &QAction::triggered, this, &MainWindow::onViewTicket);
+    connect(ui->actionEdit,    &QAction::triggered, this, &MainWindow::onEditTicket);
+    connect(ui->actionDelete,  &QAction::triggered, this, &MainWindow::onDeleteTicket);
     connect(ui->actionRefresh, &QAction::triggered, this, &MainWindow::onRefresh);
-    connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::onAbout);
-    connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
+    connect(ui->actionQuit,    &QAction::triggered, this, &QMainWindow::close);
+    connect(ui->actionAbout,   &QAction::triggered, this, [this] {
+        QMessageBox::about(this, "Про програму", "HelpDesk v 2.0");
+    });
 
-    connect(ui->ticketsTableView->selectionModel(), &QItemSelectionModel::selectionChanged,
-            this, &MainWindow::onSelectionChanged);
+    connect(ui->tableView, &QTableView::doubleClicked,
+            this, &MainWindow::onTableDoubleClicked);
 
-    ui->statusBar->showMessage(tr("Ready"));
+    connect(ui->tableView->selectionModel(),
+            &QItemSelectionModel::selectionChanged,
+            this, &MainWindow::updateActions);
+
+    updateActions();
+    statusBar()->showMessage("Готово", 3000);
 }
 
 MainWindow::~MainWindow()
@@ -32,87 +52,146 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::setupModel()
+void MainWindow::setupTable()
 {
-    m_model = new QStandardItemModel(0, 5, this);
-    m_model->setHorizontalHeaderLabels({tr("ID"), tr("Title"), tr("Priority"), tr("Status"), tr("Created At")});
-    ui->ticketsTableView->setModel(m_model);
-    ui->ticketsTableView->horizontalHeader()->setStretchLastSection(true);
+    ui->tableView->setModel(m_model);
+    ui->tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->tableView->setAlternatingRowColors(true);
+    ui->tableView->verticalHeader()->setDefaultSectionSize(26);
+    ui->tableView->verticalHeader()->hide();
+
+    auto *h = ui->tableView->horizontalHeader();
+    h->setSectionResizeMode(TicketTableModel::ColId,        QHeaderView::ResizeToContents);
+    h->setSectionResizeMode(TicketTableModel::ColTitle,     QHeaderView::Stretch);
+    h->setSectionResizeMode(TicketTableModel::ColPriority,  QHeaderView::ResizeToContents);
+    h->setSectionResizeMode(TicketTableModel::ColStatus,    QHeaderView::ResizeToContents);
+    h->setSectionResizeMode(TicketTableModel::ColCreatedAt, QHeaderView::ResizeToContents);
+    h->setHighlightSections(false);
 }
 
-void MainWindow::updateActionsState()
+void MainWindow::populateSampleData()
 {
-    bool hasSelection = ui->ticketsTableView->selectionModel()->hasSelection();
-    ui->actionView->setEnabled(hasSelection);
-    ui->actionEdit->setEnabled(hasSelection);
-    ui->actionDelete->setEnabled(hasSelection);
-}
+    const QVector<std::tuple<QString, QString, QString, QString>> samples = {
+        { "Не підключається VPN",                        "High",     "Open",        "VPN-клієнт не запускається щоранку після останнього оновлення." },
+        { "Принтер офлайн на 2-му поверсі",              "Medium",   "In Progress", "HP LaserJet відображається як офлайн у черзі друку Windows." },
+        { "Пошта не синхронізується на телефоні",        "Low",      "Open",        "Outlook Mobile перестав синхронізуватись після оновлення iOS." },
+        { "Ліцензія ПЗ закінчилась",                     "Critical", "Open",        "Ліцензії Adobe CC прострочені, дизайнери не можуть працювати." },
+        { "Повільний Wi-Fi у конференц-залі А",          "Medium",   "Resolved",    "Точку доступу замінено, швидкість відновлено." },
+        { "Налаштування ноутбука нового працівника",     "Low",      "Closed",      "Dell XPS налаштовано та передано співробітнику." },
+        { "Спрацювання антивірусу на ПК-042",            "High",     "In Progress", "Загрозу поміщено на карантин, виконується повне сканування." },
+        { "Мерехтіння монітора на робочому місці 14",    "Low",      "Open",        "Можливо, пошкоджено кабель DisplayPort." },
+    };
 
-void MainWindow::onSelectionChanged()
-{
-    updateActionsState();
-}
-
-void MainWindow::onNew()
-{
-    if (!m_ticketDialog) {
-        m_ticketDialog = new TicketDialog(this);
+    int day = 0;
+    for (auto &[title, priority, status, desc] : samples) {
+        Ticket t;
+        t.title       = title;
+        t.priority    = priority;
+        t.status      = status;
+        t.description = desc;
+        t.createdAt   = QDateTime::currentDateTime().addDays(-day++);
+        m_model->addTicket(t);
     }
-    m_ticketDialog->setMode(TicketDialog::ModeNew);
-    m_ticketDialog->setWindowTitle(tr("New Ticket"));
-    m_ticketDialog->show();
-    m_ticketDialog->raise();
-    m_ticketDialog->activateWindow();
 }
 
-void MainWindow::onView()
+int MainWindow::selectedRow() const
 {
-    if (!ui->ticketsTableView->selectionModel()->hasSelection())
+    const auto rows = ui->tableView->selectionModel()->selectedRows();
+    return rows.isEmpty() ? -1 : rows.first().row();
+}
+
+void MainWindow::updateActions()
+{
+    const bool has = selectedRow() >= 0;
+    ui->actionView->setEnabled(has);
+    ui->actionEdit->setEnabled(has);
+    ui->actionDelete->setEnabled(has);
+
+    const int total = m_model->rowCount();
+    statusBar()->showMessage(QString("Всього: %1 заявок").arg(total));
+}
+
+void MainWindow::onNewTicket()
+{
+    TicketDialog dlg(TicketDialog::ModeAdd, this);
+    if (dlg.exec() != QDialog::Accepted)
         return;
-    if (!m_ticketDialog) {
-        m_ticketDialog = new TicketDialog(this);
+
+    Ticket t = dlg.ticket();
+    if (t.title.isEmpty()) {
+        QMessageBox::warning(this, "Перевірка", "Назва не може бути порожньою.");
+        return;
     }
-    m_ticketDialog->setMode(TicketDialog::ModeView);
-    m_ticketDialog->setWindowTitle(tr("View Ticket"));
-    m_ticketDialog->show();
-    m_ticketDialog->raise();
-    m_ticketDialog->activateWindow();
+    t.createdAt = QDateTime::currentDateTime();
+    m_model->addTicket(t);
+    updateActions();
 }
 
-void MainWindow::onEdit()
+void MainWindow::onViewTicket()
 {
-    if (!ui->ticketsTableView->selectionModel()->hasSelection())
-        return;
-    if (!m_ticketDialog) {
-        m_ticketDialog = new TicketDialog(this);
+    const int row = selectedRow();
+    if (row < 0) return;
+
+    TicketDialog dlg(TicketDialog::ModeView, this);
+    dlg.setTicket(m_model->ticketAt(row));
+    if (dlg.exec() == QDialog::Accepted) {
+        Ticket t = dlg.ticket();
+        if (t.title.isEmpty()) {
+            QMessageBox::warning(this, "Перевірка", "Назва не може бути порожньою.");
+            return;
+        }
+        m_model->updateTicket(row, t);
+        updateActions();
     }
-    m_ticketDialog->setMode(TicketDialog::ModeEdit);
-    m_ticketDialog->setWindowTitle(tr("Edit Ticket"));
-    m_ticketDialog->show();
-    m_ticketDialog->raise();
-    m_ticketDialog->activateWindow();
 }
 
-void MainWindow::onDelete()
+void MainWindow::onEditTicket()
 {
-    if (!ui->ticketsTableView->selectionModel()->hasSelection())
+    const int row = selectedRow();
+    if (row < 0) return;
+
+    TicketDialog dlg(TicketDialog::ModeEdit, this);
+    dlg.setTicket(m_model->ticketAt(row));
+    if (dlg.exec() != QDialog::Accepted)
         return;
-    auto reply = QMessageBox::question(this, tr("Delete Ticket"),
-                                       tr("Delete the selected ticket?"),
-                                       QMessageBox::Yes | QMessageBox::No);
-    if (reply == QMessageBox::Yes) {
-        int row = ui->ticketsTableView->currentIndex().row();
-        m_model->removeRow(row);
-        updateActionsState();
+
+    Ticket t = dlg.ticket();
+    if (t.title.isEmpty()) {
+        QMessageBox::warning(this, "Перевірка", "Назва не може бути порожньою.");
+        return;
     }
+    m_model->updateTicket(row, t);
+    updateActions();
+}
+
+void MainWindow::onDeleteTicket()
+{
+    const int row = selectedRow();
+    if (row < 0) return;
+
+    const Ticket t = m_model->ticketAt(row);
+    const auto answer = QMessageBox::question(
+        this, "Видалення заявки",
+        QString("Видалити заявку #%1 \"%2\"?").arg(t.id).arg(t.title),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (answer != QMessageBox::Yes)
+        return;
+
+    m_model->removeTicket(row);
+    updateActions();
 }
 
 void MainWindow::onRefresh()
 {
-    ui->statusBar->showMessage(tr("Refreshed"));
+    statusBar()->showMessage("Оновлено", 2000);
+    updateActions();
 }
 
-void MainWindow::onAbout()
+void MainWindow::onTableDoubleClicked(const QModelIndex &index)
 {
-    QMessageBox::about(this, tr("About Helpdesk"), tr("Helpdesk v 1.0"));
+    if (!index.isValid()) return;
+    onViewTicket();
 }
