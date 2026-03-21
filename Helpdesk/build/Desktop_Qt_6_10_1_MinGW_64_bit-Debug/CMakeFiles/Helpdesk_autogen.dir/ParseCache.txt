@@ -5,8 +5,8 @@ C:/Users/fedot/Desktop/Helpdesk/mainwindow.h
  mmc:Q_OBJECT
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QAbstractTableModel
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QDateTime
+ mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QList
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QString
- mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QVector
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/q17memory.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/q20functional.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/q20iterator.h
@@ -135,10 +135,11 @@ C:/Users/fedot/Desktop/Helpdesk/mainwindow.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qutf8stringview.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qvariant.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qvarlengtharray.h
- mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qvector.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qversiontagging.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qxptype_traits.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qyieldcpu.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/QColor
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/QFont
  mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qaction.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qbitmap.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qbrush.h
@@ -782,8 +783,8 @@ C:/Users/fedot/Desktop/Helpdesk/tickettablemodel.h
  mmc:Q_OBJECT
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QAbstractTableModel
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QDateTime
+ mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QList
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QString
- mdp:C:/QT/6.10.1/mingw_64/include/QtCore/QVector
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/q17memory.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/q20functional.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/q20memory.h
@@ -823,6 +824,7 @@ C:/Users/fedot/Desktop/Helpdesk/tickettablemodel.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qdatastream.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qdatetime.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qdebug.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qendian.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qexceptionhandling.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qflags.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qfloat16.h
@@ -903,10 +905,20 @@ C:/Users/fedot/Desktop/Helpdesk/tickettablemodel.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qutf8stringview.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qvariant.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qvarlengtharray.h
- mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qvector.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qversiontagging.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qxptype_traits.h
  mdp:C:/QT/6.10.1/mingw_64/include/QtCore/qyieldcpu.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/QColor
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/QFont
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qcolor.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qfont.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qrgb.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qrgba64.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qtgui-config.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qtguiexports.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qtguiglobal.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qwindowdefs.h
+ mdp:C:/QT/6.10.1/mingw_64/include/QtGui/qwindowdefs_win.h
  mdp:C:/QT/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/algorithm
  mdp:C:/QT/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/array
  mdp:C:/QT/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/atomic

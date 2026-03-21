@@ -39,13 +39,34 @@ template <> constexpr inline auto TicketDialog::qt_create_metaobjectdata<qt_meta
     namespace QMC = QtMocConstants;
     QtMocHelpers::StringRefStorage qt_stringData {
         "TicketDialog",
+        "createRequested",
+        "",
+        "Ticket",
+        "ticket",
+        "updateRequested",
+        "onFormChanged",
+        "onSaveClicked",
         "onEditClicked",
-        ""
+        "onCancelClicked"
     };
 
     QtMocHelpers::UintData qt_methods {
+        // Signal 'createRequested'
+        QtMocHelpers::SignalData<void(const Ticket &)>(1, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 3, 4 },
+        }}),
+        // Signal 'updateRequested'
+        QtMocHelpers::SignalData<void(const Ticket &)>(5, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 3, 4 },
+        }}),
+        // Slot 'onFormChanged'
+        QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onSaveClicked'
+        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onEditClicked'
-        QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onCancelClicked'
+        QtMocHelpers::SlotData<void()>(9, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -69,11 +90,21 @@ void TicketDialog::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id
     auto *_t = static_cast<TicketDialog *>(_o);
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
-        case 0: _t->onEditClicked(); break;
+        case 0: _t->createRequested((*reinterpret_cast<std::add_pointer_t<Ticket>>(_a[1]))); break;
+        case 1: _t->updateRequested((*reinterpret_cast<std::add_pointer_t<Ticket>>(_a[1]))); break;
+        case 2: _t->onFormChanged(); break;
+        case 3: _t->onSaveClicked(); break;
+        case 4: _t->onEditClicked(); break;
+        case 5: _t->onCancelClicked(); break;
         default: ;
         }
     }
-    (void)_a;
+    if (_c == QMetaObject::IndexOfMethod) {
+        if (QtMocHelpers::indexOfMethod<void (TicketDialog::*)(const Ticket & )>(_a, &TicketDialog::createRequested, 0))
+            return;
+        if (QtMocHelpers::indexOfMethod<void (TicketDialog::*)(const Ticket & )>(_a, &TicketDialog::updateRequested, 1))
+            return;
+    }
 }
 
 const QMetaObject *TicketDialog::metaObject() const
@@ -95,15 +126,27 @@ int TicketDialog::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 1)
+        if (_id < 6)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 1;
+        _id -= 6;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 1)
+        if (_id < 6)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 1;
+        _id -= 6;
     }
     return _id;
+}
+
+// SIGNAL 0
+void TicketDialog::createRequested(const Ticket & _t1)
+{
+    QMetaObject::activate<void>(this, &staticMetaObject, 0, nullptr, _t1);
+}
+
+// SIGNAL 1
+void TicketDialog::updateRequested(const Ticket & _t1)
+{
+    QMetaObject::activate<void>(this, &staticMetaObject, 1, nullptr, _t1);
 }
 QT_WARNING_POP

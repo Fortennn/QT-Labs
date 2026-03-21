@@ -7,26 +7,40 @@ namespace Ui {
 class TicketDialog;
 }
 
-class TicketDialog : public QDialog {
+class TicketDialog : public QDialog
+{
     Q_OBJECT
 
 public:
-    enum Mode { ModeView, ModeAdd, ModeEdit };
+    enum class Mode { View, Edit, Create };
 
-    explicit TicketDialog(Mode mode, QWidget *parent = nullptr);
+    explicit TicketDialog(QWidget *parent = nullptr);
     ~TicketDialog();
 
-    void    setTicket(const Ticket &ticket);
-    Ticket  ticket() const;
+    void setMode(Mode mode);
+    Mode mode() const;
+
+    void loadTicket(const Ticket &ticket);
+    Ticket collectTicket() const;
+
+signals:
+    void createRequested(const Ticket &ticket);
+    void updateRequested(const Ticket &ticket);
 
 private slots:
+    void onFormChanged();
+    void onSaveClicked();
     void onEditClicked();
+    void onCancelClicked();
 
 private:
-    void setupReadOnly(bool readOnly);
+    bool isTitleValid() const;
+    bool isFormValid() const;
+    void updateUiForMode();
+    void updateValidationUi();
+    void updateButtonsState();
 
     Ui::TicketDialog *ui;
-    Mode              m_mode;
-    int               m_id = 0;
-    QDateTime         m_createdAt;
+    Mode m_mode = Mode::Create;
+    Ticket m_originalTicket;
 };

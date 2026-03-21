@@ -1,13 +1,10 @@
-#include <QApplication>
 #include "mainwindow.h"
+#include <QApplication>
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
-    app.setApplicationName("Helpdesk");
-    app.setOrganizationName("Lab");
-
+    QApplication a(argc, argv);
     MainWindow w;
     w.show();
-    return app.exec();
+    return a.exec();
 }

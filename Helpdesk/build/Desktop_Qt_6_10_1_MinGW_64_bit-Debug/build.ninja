@@ -50,7 +50,7 @@ cmake_ninja_workdir = C$:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_M
 build cmake_object_order_depends_target_Helpdesk: phony || Helpdesk_autogen Helpdesk_autogen/mocs_compilation.cpp Helpdesk_autogen/timestamp Helpdesk_autogen_timestamp_deps
 
 build CMakeFiles/Helpdesk.dir/Helpdesk_autogen/mocs_compilation.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Debug C$:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/mocs_compilation.cpp || cmake_object_order_depends_target_Helpdesk
-  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NEEDS_QMAIN -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
+  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
   DEP_FILE = CMakeFiles\Helpdesk.dir\Helpdesk_autogen\mocs_compilation.cpp.obj.d
   FLAGS = -DQT_QML_DEBUG -g -std=gnu++17 -fdiagnostics-color=always
   INCLUDES = -IC:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/include -isystem C:/QT/6.10.1/mingw_64/include/QtCore -isystem C:/QT/6.10.1/mingw_64/include -isystem C:/QT/6.10.1/mingw_64/mkspecs/win32-g++ -isystem C:/QT/6.10.1/mingw_64/include/QtWidgets -isystem C:/QT/6.10.1/mingw_64/include/QtGui
@@ -60,7 +60,7 @@ build CMakeFiles/Helpdesk.dir/Helpdesk_autogen/mocs_compilation.cpp.obj: CXX_COM
   TARGET_PDB = Helpdesk.pdb
 
 build CMakeFiles/Helpdesk.dir/main.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Debug C$:/Users/fedot/Desktop/Helpdesk/main.cpp || cmake_object_order_depends_target_Helpdesk
-  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NEEDS_QMAIN -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
+  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
   DEP_FILE = CMakeFiles\Helpdesk.dir\main.cpp.obj.d
   FLAGS = -DQT_QML_DEBUG -g -std=gnu++17 -fdiagnostics-color=always
   INCLUDES = -IC:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/include -isystem C:/QT/6.10.1/mingw_64/include/QtCore -isystem C:/QT/6.10.1/mingw_64/include -isystem C:/QT/6.10.1/mingw_64/mkspecs/win32-g++ -isystem C:/QT/6.10.1/mingw_64/include/QtWidgets -isystem C:/QT/6.10.1/mingw_64/include/QtGui
@@ -69,9 +69,9 @@ build CMakeFiles/Helpdesk.dir/main.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Deb
   TARGET_COMPILE_PDB = CMakeFiles\Helpdesk.dir\
   TARGET_PDB = Helpdesk.pdb
 
-build CMakeFiles/Helpdesk.dir/tickettablemodel.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Debug C$:/Users/fedot/Desktop/Helpdesk/tickettablemodel.cpp || cmake_object_order_depends_target_Helpdesk
-  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NEEDS_QMAIN -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
-  DEP_FILE = CMakeFiles\Helpdesk.dir\tickettablemodel.cpp.obj.d
+build CMakeFiles/Helpdesk.dir/mainwindow.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Debug C$:/Users/fedot/Desktop/Helpdesk/mainwindow.cpp || cmake_object_order_depends_target_Helpdesk
+  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
+  DEP_FILE = CMakeFiles\Helpdesk.dir\mainwindow.cpp.obj.d
   FLAGS = -DQT_QML_DEBUG -g -std=gnu++17 -fdiagnostics-color=always
   INCLUDES = -IC:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/include -isystem C:/QT/6.10.1/mingw_64/include/QtCore -isystem C:/QT/6.10.1/mingw_64/include -isystem C:/QT/6.10.1/mingw_64/mkspecs/win32-g++ -isystem C:/QT/6.10.1/mingw_64/include/QtWidgets -isystem C:/QT/6.10.1/mingw_64/include/QtGui
   OBJECT_DIR = CMakeFiles\Helpdesk.dir
@@ -80,7 +80,7 @@ build CMakeFiles/Helpdesk.dir/tickettablemodel.cpp.obj: CXX_COMPILER__Helpdesk_u
   TARGET_PDB = Helpdesk.pdb
 
 build CMakeFiles/Helpdesk.dir/ticketdialog.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Debug C$:/Users/fedot/Desktop/Helpdesk/ticketdialog.cpp || cmake_object_order_depends_target_Helpdesk
-  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NEEDS_QMAIN -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
+  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
   DEP_FILE = CMakeFiles\Helpdesk.dir\ticketdialog.cpp.obj.d
   FLAGS = -DQT_QML_DEBUG -g -std=gnu++17 -fdiagnostics-color=always
   INCLUDES = -IC:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/include -isystem C:/QT/6.10.1/mingw_64/include/QtCore -isystem C:/QT/6.10.1/mingw_64/include -isystem C:/QT/6.10.1/mingw_64/mkspecs/win32-g++ -isystem C:/QT/6.10.1/mingw_64/include/QtWidgets -isystem C:/QT/6.10.1/mingw_64/include/QtGui
@@ -89,9 +89,9 @@ build CMakeFiles/Helpdesk.dir/ticketdialog.cpp.obj: CXX_COMPILER__Helpdesk_unsca
   TARGET_COMPILE_PDB = CMakeFiles\Helpdesk.dir\
   TARGET_PDB = Helpdesk.pdb
 
-build CMakeFiles/Helpdesk.dir/mainwindow.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Debug C$:/Users/fedot/Desktop/Helpdesk/mainwindow.cpp || cmake_object_order_depends_target_Helpdesk
-  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NEEDS_QMAIN -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
-  DEP_FILE = CMakeFiles\Helpdesk.dir\mainwindow.cpp.obj.d
+build CMakeFiles/Helpdesk.dir/tickettablemodel.cpp.obj: CXX_COMPILER__Helpdesk_unscanned_Debug C$:/Users/fedot/Desktop/Helpdesk/tickettablemodel.cpp || cmake_object_order_depends_target_Helpdesk
+  DEFINES = -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
+  DEP_FILE = CMakeFiles\Helpdesk.dir\tickettablemodel.cpp.obj.d
   FLAGS = -DQT_QML_DEBUG -g -std=gnu++17 -fdiagnostics-color=always
   INCLUDES = -IC:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/include -isystem C:/QT/6.10.1/mingw_64/include/QtCore -isystem C:/QT/6.10.1/mingw_64/include -isystem C:/QT/6.10.1/mingw_64/mkspecs/win32-g++ -isystem C:/QT/6.10.1/mingw_64/include/QtWidgets -isystem C:/QT/6.10.1/mingw_64/include/QtGui
   OBJECT_DIR = CMakeFiles\Helpdesk.dir
@@ -107,10 +107,9 @@ build CMakeFiles/Helpdesk.dir/mainwindow.cpp.obj: CXX_COMPILER__Helpdesk_unscann
 #############################################
 # Link the executable Helpdesk.exe
 
-build Helpdesk.exe: CXX_EXECUTABLE_LINKER__Helpdesk_Debug CMakeFiles/Helpdesk.dir/Helpdesk_autogen/mocs_compilation.cpp.obj CMakeFiles/Helpdesk.dir/main.cpp.obj CMakeFiles/Helpdesk.dir/tickettablemodel.cpp.obj CMakeFiles/Helpdesk.dir/ticketdialog.cpp.obj CMakeFiles/Helpdesk.dir/mainwindow.cpp.obj | C$:/QT/6.10.1/mingw_64/lib/libQt6Widgets.a C$:/QT/6.10.1/mingw_64/lib/libQt6Gui.a C$:/QT/6.10.1/mingw_64/lib/libQt6Core.a C$:/QT/6.10.1/mingw_64/lib/libQt6EntryPoint.a || Helpdesk_autogen Helpdesk_autogen_timestamp_deps
+build Helpdesk.exe: CXX_EXECUTABLE_LINKER__Helpdesk_Debug CMakeFiles/Helpdesk.dir/Helpdesk_autogen/mocs_compilation.cpp.obj CMakeFiles/Helpdesk.dir/main.cpp.obj CMakeFiles/Helpdesk.dir/mainwindow.cpp.obj CMakeFiles/Helpdesk.dir/ticketdialog.cpp.obj CMakeFiles/Helpdesk.dir/tickettablemodel.cpp.obj | C$:/QT/6.10.1/mingw_64/lib/libQt6Widgets.a C$:/QT/6.10.1/mingw_64/lib/libQt6Gui.a C$:/QT/6.10.1/mingw_64/lib/libQt6Core.a || Helpdesk_autogen Helpdesk_autogen_timestamp_deps
   FLAGS = -DQT_QML_DEBUG -g
-  LINK_FLAGS = -mwindows
-  LINK_LIBRARIES = C:/QT/6.10.1/mingw_64/lib/libQt6Widgets.a  C:/QT/6.10.1/mingw_64/lib/libQt6Gui.a  C:/QT/6.10.1/mingw_64/lib/libQt6Core.a  -lmpr  -luserenv  -lmingw32  C:/QT/6.10.1/mingw_64/lib/libQt6EntryPoint.a  -lshell32  -ld3d11  -ldxgi  -ldxguid  -ld3d12  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  LINK_LIBRARIES = C:/QT/6.10.1/mingw_64/lib/libQt6Widgets.a  C:/QT/6.10.1/mingw_64/lib/libQt6Gui.a  C:/QT/6.10.1/mingw_64/lib/libQt6Core.a  -lmpr  -luserenv  -ld3d11  -ldxgi  -ldxguid  -ld3d12  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\Helpdesk.dir
   POST_BUILD = cd .
   PRE_LINK = cd .

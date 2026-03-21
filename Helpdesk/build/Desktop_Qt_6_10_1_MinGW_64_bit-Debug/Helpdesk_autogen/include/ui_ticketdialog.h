@@ -10,15 +10,16 @@
 #define UI_TICKETDIALOG_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAbstractButton>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDialog>
-#include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QFormLayout>
+#include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPlainTextEdit>
+#include <QtWidgets/QPushButton>
+#include <QtWidgets/QSpacerItem>
 #include <QtWidgets/QVBoxLayout>
 
 QT_BEGIN_NAMESPACE
@@ -31,30 +32,33 @@ public:
     QLabel *labelId;
     QLabel *labelIdValue;
     QLabel *labelTitle;
-    QLineEdit *lineEditTitle;
+    QVBoxLayout *vboxLayout;
+    QLineEdit *editTitle;
+    QLabel *labelTitleError;
     QLabel *labelPriority;
-    QComboBox *comboBoxPriority;
+    QComboBox *comboPriority;
     QLabel *labelStatus;
-    QComboBox *comboBoxStatus;
+    QComboBox *comboStatus;
     QLabel *labelCreated;
     QLabel *labelCreatedValue;
     QLabel *labelDescription;
-    QPlainTextEdit *plainTextEditDescription;
-    QDialogButtonBox *buttonBox;
+    QPlainTextEdit *editDescription;
+    QHBoxLayout *buttonsLayout;
+    QSpacerItem *spacerItem;
+    QPushButton *btnEdit;
+    QPushButton *btnClose;
+    QPushButton *btnSave;
+    QPushButton *btnCancel;
 
     void setupUi(QDialog *TicketDialog)
     {
         if (TicketDialog->objectName().isEmpty())
             TicketDialog->setObjectName("TicketDialog");
-        TicketDialog->resize(480, 360);
+        TicketDialog->resize(480, 420);
         verticalLayout = new QVBoxLayout(TicketDialog);
-        verticalLayout->setSpacing(10);
-        verticalLayout->setContentsMargins(16, 16, 16, 16);
         verticalLayout->setObjectName("verticalLayout");
         formLayout = new QFormLayout();
         formLayout->setObjectName("formLayout");
-        formLayout->setHorizontalSpacing(12);
-        formLayout->setVerticalSpacing(8);
         labelId = new QLabel(TicketDialog);
         labelId->setObjectName("labelId");
 
@@ -70,30 +74,40 @@ public:
 
         formLayout->setWidget(1, QFormLayout::ItemRole::LabelRole, labelTitle);
 
-        lineEditTitle = new QLineEdit(TicketDialog);
-        lineEditTitle->setObjectName("lineEditTitle");
+        vboxLayout = new QVBoxLayout();
+        vboxLayout->setObjectName("vboxLayout");
+        editTitle = new QLineEdit(TicketDialog);
+        editTitle->setObjectName("editTitle");
 
-        formLayout->setWidget(1, QFormLayout::ItemRole::FieldRole, lineEditTitle);
+        vboxLayout->addWidget(editTitle);
+
+        labelTitleError = new QLabel(TicketDialog);
+        labelTitleError->setObjectName("labelTitleError");
+
+        vboxLayout->addWidget(labelTitleError);
+
+
+        formLayout->setLayout(1, QFormLayout::ItemRole::FieldRole, vboxLayout);
 
         labelPriority = new QLabel(TicketDialog);
         labelPriority->setObjectName("labelPriority");
 
         formLayout->setWidget(2, QFormLayout::ItemRole::LabelRole, labelPriority);
 
-        comboBoxPriority = new QComboBox(TicketDialog);
-        comboBoxPriority->setObjectName("comboBoxPriority");
+        comboPriority = new QComboBox(TicketDialog);
+        comboPriority->setObjectName("comboPriority");
 
-        formLayout->setWidget(2, QFormLayout::ItemRole::FieldRole, comboBoxPriority);
+        formLayout->setWidget(2, QFormLayout::ItemRole::FieldRole, comboPriority);
 
         labelStatus = new QLabel(TicketDialog);
         labelStatus->setObjectName("labelStatus");
 
         formLayout->setWidget(3, QFormLayout::ItemRole::LabelRole, labelStatus);
 
-        comboBoxStatus = new QComboBox(TicketDialog);
-        comboBoxStatus->setObjectName("comboBoxStatus");
+        comboStatus = new QComboBox(TicketDialog);
+        comboStatus->setObjectName("comboStatus");
 
-        formLayout->setWidget(3, QFormLayout::ItemRole::FieldRole, comboBoxStatus);
+        formLayout->setWidget(3, QFormLayout::ItemRole::FieldRole, comboStatus);
 
         labelCreated = new QLabel(TicketDialog);
         labelCreated->setObjectName("labelCreated");
@@ -111,20 +125,43 @@ public:
 
         formLayout->setWidget(5, QFormLayout::ItemRole::LabelRole, labelDescription);
 
-        plainTextEditDescription = new QPlainTextEdit(TicketDialog);
-        plainTextEditDescription->setObjectName("plainTextEditDescription");
+        editDescription = new QPlainTextEdit(TicketDialog);
+        editDescription->setObjectName("editDescription");
+        editDescription->setMinimumSize(QSize(0, 100));
 
-        formLayout->setWidget(5, QFormLayout::ItemRole::FieldRole, plainTextEditDescription);
+        formLayout->setWidget(5, QFormLayout::ItemRole::FieldRole, editDescription);
 
 
         verticalLayout->addLayout(formLayout);
 
-        buttonBox = new QDialogButtonBox(TicketDialog);
-        buttonBox->setObjectName("buttonBox");
-        buttonBox->setOrientation(Qt::Horizontal);
-        buttonBox->setStandardButtons(QDialogButtonBox::Cancel|QDialogButtonBox::Ok);
+        buttonsLayout = new QHBoxLayout();
+        buttonsLayout->setObjectName("buttonsLayout");
+        spacerItem = new QSpacerItem(40, 20, QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Minimum);
 
-        verticalLayout->addWidget(buttonBox);
+        buttonsLayout->addItem(spacerItem);
+
+        btnEdit = new QPushButton(TicketDialog);
+        btnEdit->setObjectName("btnEdit");
+
+        buttonsLayout->addWidget(btnEdit);
+
+        btnClose = new QPushButton(TicketDialog);
+        btnClose->setObjectName("btnClose");
+
+        buttonsLayout->addWidget(btnClose);
+
+        btnSave = new QPushButton(TicketDialog);
+        btnSave->setObjectName("btnSave");
+
+        buttonsLayout->addWidget(btnSave);
+
+        btnCancel = new QPushButton(TicketDialog);
+        btnCancel->setObjectName("btnCancel");
+
+        buttonsLayout->addWidget(btnCancel);
+
+
+        verticalLayout->addLayout(buttonsLayout);
 
 
         retranslateUi(TicketDialog);
@@ -136,13 +173,19 @@ public:
     {
         TicketDialog->setWindowTitle(QCoreApplication::translate("TicketDialog", "Ticket", nullptr));
         labelId->setText(QCoreApplication::translate("TicketDialog", "ID:", nullptr));
-        labelIdValue->setText(QString());
+        labelIdValue->setText(QCoreApplication::translate("TicketDialog", "-", nullptr));
         labelTitle->setText(QCoreApplication::translate("TicketDialog", "Title:", nullptr));
+        labelTitleError->setText(QString());
+        labelTitleError->setStyleSheet(QCoreApplication::translate("TicketDialog", "color: red;", nullptr));
         labelPriority->setText(QCoreApplication::translate("TicketDialog", "Priority:", nullptr));
         labelStatus->setText(QCoreApplication::translate("TicketDialog", "Status:", nullptr));
         labelCreated->setText(QCoreApplication::translate("TicketDialog", "Created:", nullptr));
-        labelCreatedValue->setText(QString());
+        labelCreatedValue->setText(QCoreApplication::translate("TicketDialog", "-", nullptr));
         labelDescription->setText(QCoreApplication::translate("TicketDialog", "Description:", nullptr));
+        btnEdit->setText(QCoreApplication::translate("TicketDialog", "Edit", nullptr));
+        btnClose->setText(QCoreApplication::translate("TicketDialog", "Close", nullptr));
+        btnSave->setText(QCoreApplication::translate("TicketDialog", "Save", nullptr));
+        btnCancel->setText(QCoreApplication::translate("TicketDialog", "Cancel", nullptr));
     } // retranslateUi
 
 };

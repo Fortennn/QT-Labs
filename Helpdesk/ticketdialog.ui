@@ -7,109 +7,115 @@
     <x>0</x>
     <y>0</y>
     <width>480</width>
-    <height>360</height>
+    <height>420</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Ticket</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
-   <property name="margin">
-    <number>16</number>
-   </property>
-   <property name="spacing">
-    <number>10</number>
-   </property>
    <item>
     <layout class="QFormLayout" name="formLayout">
-     <property name="horizontalSpacing">
-      <number>12</number>
-     </property>
-     <property name="verticalSpacing">
-      <number>8</number>
-     </property>
      <item row="0" column="0">
       <widget class="QLabel" name="labelId">
-       <property name="text">
-        <string>ID:</string>
-       </property>
+       <property name="text"><string>ID:</string></property>
       </widget>
      </item>
      <item row="0" column="1">
       <widget class="QLabel" name="labelIdValue">
-       <property name="text">
-        <string/>
-       </property>
+       <property name="text"><string>-</string></property>
       </widget>
      </item>
      <item row="1" column="0">
       <widget class="QLabel" name="labelTitle">
-       <property name="text">
-        <string>Title:</string>
-       </property>
+       <property name="text"><string>Title:</string></property>
       </widget>
      </item>
      <item row="1" column="1">
-      <widget class="QLineEdit" name="lineEditTitle"/>
+      <layout class="QVBoxLayout">
+       <item>
+        <widget class="QLineEdit" name="editTitle"/>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelTitleError">
+         <property name="text"><string></string></property>
+         <property name="styleSheet"><string>color: red;</string></property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item row="2" column="0">
       <widget class="QLabel" name="labelPriority">
-       <property name="text">
-        <string>Priority:</string>
-       </property>
+       <property name="text"><string>Priority:</string></property>
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QComboBox" name="comboBoxPriority"/>
+      <widget class="QComboBox" name="comboPriority"/>
      </item>
      <item row="3" column="0">
       <widget class="QLabel" name="labelStatus">
-       <property name="text">
-        <string>Status:</string>
-       </property>
+       <property name="text"><string>Status:</string></property>
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QComboBox" name="comboBoxStatus"/>
+      <widget class="QComboBox" name="comboStatus"/>
      </item>
      <item row="4" column="0">
       <widget class="QLabel" name="labelCreated">
-       <property name="text">
-        <string>Created:</string>
-       </property>
+       <property name="text"><string>Created:</string></property>
       </widget>
      </item>
      <item row="4" column="1">
       <widget class="QLabel" name="labelCreatedValue">
-       <property name="text">
-        <string/>
-       </property>
+       <property name="text"><string>-</string></property>
       </widget>
      </item>
      <item row="5" column="0">
       <widget class="QLabel" name="labelDescription">
-       <property name="text">
-        <string>Description:</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignTop</set>
-       </property>
+       <property name="text"><string>Description:</string></property>
+       <property name="alignment"><set>Qt::AlignTop</set></property>
       </widget>
      </item>
      <item row="5" column="1">
-      <widget class="QPlainTextEdit" name="plainTextEditDescription"/>
+      <widget class="QPlainTextEdit" name="editDescription">
+       <property name="minimumSize">
+        <size><width>0</width><height>100</height></size>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>
    <item>
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="buttonsLayout">
+     <item>
+      <spacer>
+       <property name="orientation"><enum>Qt::Horizontal</enum></property>
+       <property name="sizeHint" stdset="0">
+        <size><width>40</width><height>20</height></size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnEdit">
+       <property name="text"><string>Edit</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnClose">
+       <property name="text"><string>Close</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnSave">
+       <property name="text"><string>Save</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text"><string>Cancel</string></property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

@@ -2,8 +2,8 @@ C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpd
   C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/moc_predefs.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/QAbstractTableModel \
   C:/QT/6.10.1/mingw_64/include/QtCore/QDateTime \
+  C:/QT/6.10.1/mingw_64/include/QtCore/QList \
   C:/QT/6.10.1/mingw_64/include/QtCore/QString \
-  C:/QT/6.10.1/mingw_64/include/QtCore/QVector \
   C:/QT/6.10.1/mingw_64/include/QtCore/q17memory.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/q20functional.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/q20iterator.h \
@@ -132,10 +132,11 @@ C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpd
   C:/QT/6.10.1/mingw_64/include/QtCore/qutf8stringview.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qvariant.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qvarlengtharray.h \
-  C:/QT/6.10.1/mingw_64/include/QtCore/qvector.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qversiontagging.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qxptype_traits.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qyieldcpu.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/QColor \
+  C:/QT/6.10.1/mingw_64/include/QtGui/QFont \
   C:/QT/6.10.1/mingw_64/include/QtGui/qaction.h \
   C:/QT/6.10.1/mingw_64/include/QtGui/qbitmap.h \
   C:/QT/6.10.1/mingw_64/include/QtGui/qbrush.h \

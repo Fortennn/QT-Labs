@@ -2,8 +2,8 @@ C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpd
   C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/moc_predefs.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/QAbstractTableModel \
   C:/QT/6.10.1/mingw_64/include/QtCore/QDateTime \
+  C:/QT/6.10.1/mingw_64/include/QtCore/QList \
   C:/QT/6.10.1/mingw_64/include/QtCore/QString \
-  C:/QT/6.10.1/mingw_64/include/QtCore/QVector \
   C:/QT/6.10.1/mingw_64/include/QtCore/q17memory.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/q20functional.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/q20memory.h \
@@ -43,6 +43,7 @@ C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpd
   C:/QT/6.10.1/mingw_64/include/QtCore/qdatastream.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qdatetime.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qdebug.h \
+  C:/QT/6.10.1/mingw_64/include/QtCore/qendian.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qexceptionhandling.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qflags.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qfloat16.h \
@@ -123,10 +124,20 @@ C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpd
   C:/QT/6.10.1/mingw_64/include/QtCore/qutf8stringview.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qvariant.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qvarlengtharray.h \
-  C:/QT/6.10.1/mingw_64/include/QtCore/qvector.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qversiontagging.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qxptype_traits.h \
   C:/QT/6.10.1/mingw_64/include/QtCore/qyieldcpu.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/QColor \
+  C:/QT/6.10.1/mingw_64/include/QtGui/QFont \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qcolor.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qfont.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qrgb.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qrgba64.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qtgui-config.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qtguiexports.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qtguiglobal.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qwindowdefs.h \
+  C:/QT/6.10.1/mingw_64/include/QtGui/qwindowdefs_win.h \
   C:/QT/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/algorithm \
   C:/QT/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/array \
   C:/QT/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/atomic \

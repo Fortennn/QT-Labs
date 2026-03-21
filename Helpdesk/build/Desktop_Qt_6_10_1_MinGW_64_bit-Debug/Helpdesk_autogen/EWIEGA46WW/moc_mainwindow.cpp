@@ -39,35 +39,63 @@ template <> constexpr inline auto MainWindow::qt_create_metaobjectdata<qt_meta_t
     namespace QMC = QtMocConstants;
     QtMocHelpers::StringRefStorage qt_stringData {
         "MainWindow",
-        "onNewTicket",
+        "onNewTriggered",
         "",
-        "onViewTicket",
-        "onEditTicket",
-        "onDeleteTicket",
-        "onRefresh",
-        "updateActions",
-        "onTableDoubleClicked",
-        "QModelIndex",
-        "index"
+        "onViewTriggered",
+        "onEditTriggered",
+        "onDeleteTriggered",
+        "onRefreshTriggered",
+        "onExportCsvTriggered",
+        "onOpenCsvTriggered",
+        "onExitTriggered",
+        "onShowToolbarToggled",
+        "checked",
+        "onShowFilterToggled",
+        "onResetColumnWidths",
+        "onAboutTriggered",
+        "onSearchChanged",
+        "onFilterChanged",
+        "onClearClicked",
+        "updateActionsState"
     };
 
     QtMocHelpers::UintData qt_methods {
-        // Slot 'onNewTicket'
+        // Slot 'onNewTriggered'
         QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onViewTicket'
+        // Slot 'onViewTriggered'
         QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onEditTicket'
+        // Slot 'onEditTriggered'
         QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDeleteTicket'
+        // Slot 'onDeleteTriggered'
         QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onRefresh'
+        // Slot 'onRefreshTriggered'
         QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'updateActions'
+        // Slot 'onExportCsvTriggered'
         QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onTableDoubleClicked'
-        QtMocHelpers::SlotData<void(const QModelIndex &)>(8, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { 0x80000000 | 9, 10 },
+        // Slot 'onOpenCsvTriggered'
+        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onExitTriggered'
+        QtMocHelpers::SlotData<void()>(9, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onShowToolbarToggled'
+        QtMocHelpers::SlotData<void(bool)>(10, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Bool, 11 },
         }}),
+        // Slot 'onShowFilterToggled'
+        QtMocHelpers::SlotData<void(bool)>(12, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Bool, 11 },
+        }}),
+        // Slot 'onResetColumnWidths'
+        QtMocHelpers::SlotData<void()>(13, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onAboutTriggered'
+        QtMocHelpers::SlotData<void()>(14, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onSearchChanged'
+        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onFilterChanged'
+        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onClearClicked'
+        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'updateActionsState'
+        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -91,13 +119,22 @@ void MainWindow::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
     auto *_t = static_cast<MainWindow *>(_o);
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
-        case 0: _t->onNewTicket(); break;
-        case 1: _t->onViewTicket(); break;
-        case 2: _t->onEditTicket(); break;
-        case 3: _t->onDeleteTicket(); break;
-        case 4: _t->onRefresh(); break;
-        case 5: _t->updateActions(); break;
-        case 6: _t->onTableDoubleClicked((*reinterpret_cast<std::add_pointer_t<QModelIndex>>(_a[1]))); break;
+        case 0: _t->onNewTriggered(); break;
+        case 1: _t->onViewTriggered(); break;
+        case 2: _t->onEditTriggered(); break;
+        case 3: _t->onDeleteTriggered(); break;
+        case 4: _t->onRefreshTriggered(); break;
+        case 5: _t->onExportCsvTriggered(); break;
+        case 6: _t->onOpenCsvTriggered(); break;
+        case 7: _t->onExitTriggered(); break;
+        case 8: _t->onShowToolbarToggled((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
+        case 9: _t->onShowFilterToggled((*reinterpret_cast<std::add_pointer_t<bool>>(_a[1]))); break;
+        case 10: _t->onResetColumnWidths(); break;
+        case 11: _t->onAboutTriggered(); break;
+        case 12: _t->onSearchChanged(); break;
+        case 13: _t->onFilterChanged(); break;
+        case 14: _t->onClearClicked(); break;
+        case 15: _t->updateActionsState(); break;
         default: ;
         }
     }
@@ -122,14 +159,14 @@ int MainWindow::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 7)
+        if (_id < 16)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 7;
+        _id -= 16;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 7)
+        if (_id < 16)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 7;
+        _id -= 16;
     }
     return _id;
 }
