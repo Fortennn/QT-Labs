@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/fedot/Desktop/Helpdesk
+# Install script for directory: C:/Papki/qt-labs/Helpdesk
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

@@ -1,4 +1,0 @@
-build-*/
-.qtcreator/
-CMakeUserPresets.json
-*.user

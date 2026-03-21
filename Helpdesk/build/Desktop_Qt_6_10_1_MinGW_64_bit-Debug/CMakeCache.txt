@@ -301,7 +301,7 @@ Helpdesk_BINARY_DIR:STATIC=C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10
 Helpdesk_IS_TOP_LEVEL:STATIC=ON
 
 //Value Computed by CMake
-Helpdesk_SOURCE_DIR:STATIC=C:/Users/fedot/Desktop/Helpdesk
+Helpdesk_SOURCE_DIR:STATIC=C:/Papki/qt-labs/Helpdesk
 
 //Additional directories where find(Qt6 ...) host Qt components
 // are searched
@@ -439,7 +439,7 @@ CMAKE_GENERATOR_TOOLSET:INTERNAL=
 CMAKE_HAVE_LIBC_PTHREAD:INTERNAL=1
 //Source directory with the top level CMakeLists.txt file for this
 // project
-CMAKE_HOME_DIRECTORY:INTERNAL=C:/Users/fedot/Desktop/Helpdesk
+CMAKE_HOME_DIRECTORY:INTERNAL=C:/Papki/qt-labs/Helpdesk
 //ADVANCED property for variable: CMAKE_INSTALL_BINDIR
 CMAKE_INSTALL_BINDIR-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_INSTALL_DATADIR

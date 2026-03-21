@@ -3,11 +3,11 @@
 	"BUILD_DIR" : "C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen",
 	"CMAKE_BINARY_DIR" : "C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug",
 	"CMAKE_CURRENT_BINARY_DIR" : "C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug",
-	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Users/fedot/Desktop/Helpdesk",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Papki/qt-labs/Helpdesk",
 	"CMAKE_EXECUTABLE" : "C:/QT/Tools/CMake_64/bin/cmake.exe",
 	"CMAKE_LIST_FILES" : 
 	[
-		"C:/Users/fedot/Desktop/Helpdesk/CMakeLists.txt",
+		"C:/Papki/qt-labs/Helpdesk/CMakeLists.txt",
 		"C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/.qtc/package-manager/auto-setup.cmake",
 		"C:/QT/Tools/CMake_64/share/cmake-3.30/Modules/CMakeDetermineSystem.cmake",
 		"C:/QT/Tools/CMake_64/share/cmake-3.30/Modules/CMakeSystem.cmake.in",
@@ -333,6 +333,24 @@
 		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Widgets/Qt6QModernWindowsStylePluginTargets-relwithdebinfo.cmake",
 		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Widgets/Qt6QModernWindowsStylePluginAdditionalTargetInfo.cmake",
 		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Widgets/Qt6WidgetsVersionlessAliasTargets.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreConfigVersion.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreConfigVersionImpl.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreConfig.cmake",
+		"C:/QT/Tools/CMake_64/share/cmake-3.30/Modules/CMakeFindDependencyMacro.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreDependencies.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6CoreTools/Qt6CoreToolsConfig.cmake",
+		"C:/QT/Tools/CMake_64/share/cmake-3.30/Modules/CMakeFindDependencyMacro.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6CoreTools/Qt6CoreToolsDependencies.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6CoreTools/Qt6CoreToolsTargets.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreTargets.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreAdditionalTargetInfo.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreMacros.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreConfigExtras.cmake",
+		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6Core/Qt6CoreVersionlessAliasTargets.cmake",
 		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6/Qt6ConfigVersion.cmake",
 		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6/Qt6ConfigVersionImpl.cmake",
 		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6/Qt6Config.cmake",
@@ -377,32 +395,38 @@
 		"C:/QT/Tools/CMake_64/share/cmake-3.30/Modules/CMakeFindDependencyMacro.cmake",
 		"C:/QT/6.10.1/mingw_64/lib/cmake/Qt6/Qt6Dependencies.cmake"
 	],
-	"CMAKE_SOURCE_DIR" : "C:/Users/fedot/Desktop/Helpdesk",
+	"CMAKE_SOURCE_DIR" : "C:/Papki/qt-labs/Helpdesk",
 	"CROSS_CONFIG" : false,
 	"DEP_FILE" : "C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/Helpdesk_autogen/deps",
 	"DEP_FILE_RULE_NAME" : "Helpdesk_autogen/timestamp",
 	"HEADERS" : 
 	[
 		[
-			"C:/Users/fedot/Desktop/Helpdesk/mainwindow.h",
+			"C:/Papki/qt-labs/Helpdesk/csvticketrepository.h",
+			"MU",
+			"EWIEGA46WW/moc_csvticketrepository.cpp",
+			null
+		],
+		[
+			"C:/Papki/qt-labs/Helpdesk/mainwindow.h",
 			"MU",
 			"EWIEGA46WW/moc_mainwindow.cpp",
 			null
 		],
 		[
-			"C:/Users/fedot/Desktop/Helpdesk/ticket.h",
+			"C:/Papki/qt-labs/Helpdesk/ticket.h",
 			"MU",
 			"EWIEGA46WW/moc_ticket.cpp",
 			null
 		],
 		[
-			"C:/Users/fedot/Desktop/Helpdesk/ticketdialog.h",
+			"C:/Papki/qt-labs/Helpdesk/ticketdialog.h",
 			"MU",
 			"EWIEGA46WW/moc_ticketdialog.cpp",
 			null
 		],
 		[
-			"C:/Users/fedot/Desktop/Helpdesk/tickettablemodel.h",
+			"C:/Papki/qt-labs/Helpdesk/tickettablemodel.h",
 			"MU",
 			"EWIEGA46WW/moc_tickettablemodel.cpp",
 			null
@@ -478,10 +502,11 @@
 	"SETTINGS_FILE" : "C:/Users/fedot/Desktop/Helpdesk/build/Desktop_Qt_6_10_1_MinGW_64_bit-Debug/CMakeFiles/Helpdesk_autogen.dir/AutogenUsed.txt",
 	"SOURCES" : 
 	[
-		[ "C:/Users/fedot/Desktop/Helpdesk/main.cpp", "MU", null ],
-		[ "C:/Users/fedot/Desktop/Helpdesk/mainwindow.cpp", "MU", null ],
-		[ "C:/Users/fedot/Desktop/Helpdesk/ticketdialog.cpp", "MU", null ],
-		[ "C:/Users/fedot/Desktop/Helpdesk/tickettablemodel.cpp", "MU", null ]
+		[ "C:/Papki/qt-labs/Helpdesk/csvticketrepository.cpp", "MU", null ],
+		[ "C:/Papki/qt-labs/Helpdesk/main.cpp", "MU", null ],
+		[ "C:/Papki/qt-labs/Helpdesk/mainwindow.cpp", "MU", null ],
+		[ "C:/Papki/qt-labs/Helpdesk/ticketdialog.cpp", "MU", null ],
+		[ "C:/Papki/qt-labs/Helpdesk/tickettablemodel.cpp", "MU", null ]
 	],
 	"UIC_OPTIONS" : [],
 	"UIC_SEARCH_PATHS" : [],
