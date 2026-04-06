@@ -107,13 +107,25 @@ bool PasswordTableModel::setData(const QModelIndex &index, const QVariant &value
     return true;
 }
 
+void PasswordTableModel::setEntries(const QList<PasswordEntry> &entries)
+{
+    beginResetModel();
+    m_entries = entries;
+    endResetModel();
+}
+
+void PasswordTableModel::updateEntry(int row, const PasswordEntry &entry)
+{
+    if (row < 0 || row >= m_entries.size())
+        return;
+    m_entries[row] = entry;
+    emit dataChanged(index(row, 0), index(row, ColCount - 1));
+}
+
 void PasswordTableModel::addEntry(const PasswordEntry &entry)
 {
     beginInsertRows(QModelIndex(), m_entries.size(), m_entries.size());
-    PasswordEntry e = entry;
-    e.id = m_nextId++;
-    e.updatedAt = QDateTime::currentDateTime();
-    m_entries.append(e);
+    m_entries.append(entry);
     endInsertRows();
 }
 

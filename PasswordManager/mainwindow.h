@@ -3,6 +3,8 @@
 #include <QMainWindow>
 #include <QSortFilterProxyModel>
 #include "passwordtablemodel.h"
+#include "databasemanager.h"
+#include "passwordrepository.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -29,7 +31,12 @@ private slots:
     void updateStatusBar();
 
 private:
+    void reloadFromDatabase();
+    void onModelDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QList<int> &roles);
+
     Ui::MainWindow *ui;
-    PasswordTableModel *m_model;
+    PasswordTableModel    *m_model;
     QSortFilterProxyModel *m_proxyModel;
+    DatabaseManager        m_dbManager;
+    PasswordRepository    *m_repository = nullptr;
 };

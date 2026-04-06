@@ -5,6 +5,7 @@
 #include <QClipboard>
 #include <QApplication>
 #include <QHeaderView>
+#include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -14,6 +15,14 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    if (!m_dbManager.open("passwords.db")) {
+        QMessageBox::critical(this, "Database Error", "Failed to open the database.");
+    } else if (!m_dbManager.initializeSchema()) {
+        QMessageBox::critical(this, "Database Error", "Failed to initialize the database schema.");
+    } else {
+        m_repository = new PasswordRepository(m_dbManager.database());
+        reloadFromDatabase();
+    }
 
     m_proxyModel->setSourceModel(m_model);
     m_proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
@@ -49,16 +58,17 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->mainToolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
-    connect(ui->searchEdit,   &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
-    connect(ui->clearButton,  &QPushButton::clicked,   this, &MainWindow::onClearSearch);
+    connect(ui->searchEdit,    &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
+    connect(ui->clearButton,   &QPushButton::clicked,   this, &MainWindow::onClearSearch);
     connect(ui->comboCategory, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onCategoryFilterChanged);
 
-    connect(m_model, &QAbstractItemModel::rowsInserted,   this, &MainWindow::updateStatusBar);
-    connect(m_model, &QAbstractItemModel::rowsRemoved,    this, &MainWindow::updateStatusBar);
-    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, &MainWindow::updateStatusBar);
-    connect(m_proxyModel, &QSortFilterProxyModel::rowsInserted, this, &MainWindow::updateStatusBar);
-    connect(m_proxyModel, &QSortFilterProxyModel::rowsRemoved,  this, &MainWindow::updateStatusBar);
+    connect(m_model, &PasswordTableModel::dataChanged,   this, &MainWindow::onModelDataChanged);
+    connect(m_model, &QAbstractItemModel::rowsInserted,  this, &MainWindow::updateStatusBar);
+    connect(m_model, &QAbstractItemModel::rowsRemoved,   this, &MainWindow::updateStatusBar);
+    connect(m_proxyModel, &QAbstractItemModel::modelReset,         this, &MainWindow::updateStatusBar);
+    connect(m_proxyModel, &QSortFilterProxyModel::rowsInserted,    this, &MainWindow::updateStatusBar);
+    connect(m_proxyModel, &QSortFilterProxyModel::rowsRemoved,     this, &MainWindow::updateStatusBar);
 
     updateStatusBar();
 }
@@ -68,15 +78,40 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::reloadFromDatabase()
+{
+    if (!m_repository)
+        return;
+    m_model->setEntries(m_repository->loadAll());
+}
+
+void MainWindow::onModelDataChanged(const QModelIndex &topLeft, const QModelIndex &, const QList<int> &roles)
+{
+    if (!m_repository)
+        return;
+    if (!roles.contains(Qt::EditRole) && !roles.isEmpty())
+        return;
+    int row = topLeft.row();
+    PasswordEntry entry = m_model->entryAt(row);
+    if (!m_repository->update(entry))
+        QMessageBox::warning(this, "Database Error", "Failed to update the entry in the database.");
+}
+
 void MainWindow::onNewTriggered()
 {
+    if (!m_repository) return;
+
     PasswordEntry entry;
     entry.title = "New Entry";
+    if (!m_repository->insert(entry)) {
+        QMessageBox::warning(this, "Database Error", "Failed to insert the entry.");
+        return;
+    }
     m_model->addEntry(entry);
 
     int newRow = m_model->rowCount() - 1;
     QModelIndex sourceIndex = m_model->index(newRow, PasswordTableModel::ColTitle);
-    QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
+    QModelIndex proxyIndex  = m_proxyModel->mapFromSource(sourceIndex);
 
     ui->tableViewPasswords->setCurrentIndex(proxyIndex);
     ui->tableViewPasswords->scrollTo(proxyIndex);
@@ -109,7 +144,14 @@ void MainWindow::onDeleteTriggered()
 
     if (answer == QMessageBox::Yes) {
         QModelIndex sourceIndex = m_proxyModel->mapToSource(current);
-        m_model->removeEntry(sourceIndex.row());
+        int row = sourceIndex.row();
+        PasswordEntry entry = m_model->entryAt(row);
+
+        if (m_repository && !m_repository->remove(entry.id)) {
+            QMessageBox::warning(this, "Database Error", "Failed to delete the entry.");
+            return;
+        }
+        m_model->removeEntry(row);
     }
 
     updateStatusBar();
@@ -117,7 +159,7 @@ void MainWindow::onDeleteTriggered()
 
 void MainWindow::onSaveTriggered()
 {
-    ui->statusBar->showMessage("Changes saved.", 3000);
+    ui->statusBar->showMessage("All changes are saved to the database.", 3000);
 }
 
 void MainWindow::onCopyUsernameTriggered()

@@ -29,7 +29,9 @@ public:
     Qt::ItemFlags flags(const QModelIndex &index) const override;
     bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
 
+    void setEntries(const QList<PasswordEntry> &entries);
     void addEntry(const PasswordEntry &entry);
+    void updateEntry(int row, const PasswordEntry &entry);
     void removeEntry(int row);
     PasswordEntry entryAt(int row) const;
     int nextId() const;
