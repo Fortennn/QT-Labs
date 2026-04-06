@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
-#include <QSortFilterProxyModel>
+#include "passwordfilterproxymodel.h"
 #include "passwordtablemodel.h"
 #include "databasemanager.h"
 #include "passwordrepository.h"
@@ -30,13 +30,17 @@ private slots:
     void onCategoryFilterChanged(int index);
     void updateStatusBar();
 
+    void onNewDBTriggered();
+    void onDeleteDBTriggered();
+    void onAboutTriggered();
+
 private:
     void reloadFromDatabase();
-    void onModelDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QList<int> &roles);
+    void applyModernUI();
 
     Ui::MainWindow *ui;
-    PasswordTableModel    *m_model;
-    QSortFilterProxyModel *m_proxyModel;
-    DatabaseManager        m_dbManager;
+    PasswordTableModel       *m_model;
+    PasswordFilterProxyModel *m_proxyModel;
+    DatabaseManager           m_dbManager;
     PasswordRepository    *m_repository = nullptr;
 };

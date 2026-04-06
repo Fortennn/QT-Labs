@@ -5,6 +5,11 @@ PasswordTableModel::PasswordTableModel(QObject *parent)
 {
 }
 
+void PasswordTableModel::setRepository(PasswordRepository *repository)
+{
+    m_repository = repository;
+}
+
 int PasswordTableModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
@@ -96,6 +101,12 @@ bool PasswordTableModel::setData(const QModelIndex &index, const QVariant &value
     }
 
     entry.updatedAt = QDateTime::currentDateTime();
+
+    if (m_repository) {
+        if (!m_repository->update(entry)) {
+            return false;
+        }
+    }
 
     emit dataChanged(index, index, {role});
     emit dataChanged(

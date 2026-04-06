@@ -3,6 +3,7 @@
 #include <QAbstractTableModel>
 #include <QList>
 #include "passwordentry.h"
+#include "passwordrepository.h"
 
 class PasswordTableModel : public QAbstractTableModel
 {
@@ -31,6 +32,7 @@ public:
 
     void setEntries(const QList<PasswordEntry> &entries);
     void addEntry(const PasswordEntry &entry);
+    void setRepository(PasswordRepository *repository);
     void updateEntry(int row, const PasswordEntry &entry);
     void removeEntry(int row);
     PasswordEntry entryAt(int row) const;
@@ -39,4 +41,5 @@ public:
 private:
     QList<PasswordEntry> m_entries;
     int m_nextId = 1;
+    PasswordRepository *m_repository = nullptr;
 };

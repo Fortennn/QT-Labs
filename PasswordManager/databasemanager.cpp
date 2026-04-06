@@ -6,7 +6,9 @@
 
 bool DatabaseManager::open(const QString &filePath)
 {
-    m_db = QSqlDatabase::addDatabase("QSQLITE");
+    static int connCount = 0;
+    QString connName = QString("pm_conn_%1").arg(++connCount);
+    m_db = QSqlDatabase::addDatabase("QSQLITE", connName);
     m_db.setDatabaseName(filePath);
 
     if (!m_db.open()) {

@@ -24,6 +24,10 @@ set(PROJECT_SOURCES
     databasemanager.h
     passwordrepository.cpp
     passwordrepository.h
+    passwordfilterproxymodel.cpp
+    passwordfilterproxymodel.h
+    addentrydialog.cpp
+    addentrydialog.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
