@@ -5,6 +5,7 @@
 #include "passwordtablemodel.h"
 #include "databasemanager.h"
 #include "passwordrepository.h"
+#include "passwordleakchecker.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -34,6 +35,10 @@ private slots:
     void onDeleteDBTriggered();
     void onAboutTriggered();
 
+    void onCheckPasswordTriggered();
+    void onLeakCheckCompleted(bool isLeaked, int count);
+    void onLeakCheckError(const QString &errorMessage);
+
 private:
     void reloadFromDatabase();
     void applyModernUI();
@@ -43,4 +48,5 @@ private:
     PasswordFilterProxyModel *m_proxyModel;
     DatabaseManager           m_dbManager;
     PasswordRepository    *m_repository = nullptr;
+    PasswordLeakChecker   *m_leakChecker;
 };

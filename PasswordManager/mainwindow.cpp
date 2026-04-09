@@ -20,8 +20,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     QAction *actionNewDB = new QAction("New Database...", this);
     QAction *actionDeleteDB = new QAction("Delete Database...", this);
+    QAction *actionCheckPwd = new QAction("Check Password Security", this);
+    
     ui->menuTools->addAction(actionNewDB);
     ui->menuTools->addAction(actionDeleteDB);
+    ui->menuTools->addSeparator();
+    ui->menuTools->addAction(actionCheckPwd);
 
     QAction *actionAbout = new QAction("About Password Manager", this);
     QAction *actionAboutQt = new QAction("About Qt", this);
@@ -30,8 +34,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(actionNewDB, &QAction::triggered, this, &MainWindow::onNewDBTriggered);
     connect(actionDeleteDB, &QAction::triggered, this, &MainWindow::onDeleteDBTriggered);
+    connect(actionCheckPwd, &QAction::triggered, this, &MainWindow::onCheckPasswordTriggered);
     connect(actionAbout, &QAction::triggered, this, &MainWindow::onAboutTriggered);
     connect(actionAboutQt, &QAction::triggered, qApp, &QApplication::aboutQt);
+
+    m_leakChecker = new PasswordLeakChecker(this);
+    connect(m_leakChecker, &PasswordLeakChecker::checkCompleted, this, &MainWindow::onLeakCheckCompleted);
+    connect(m_leakChecker, &PasswordLeakChecker::checkError, this, &MainWindow::onLeakCheckError);
 
     if (!m_dbManager.open("passwords.db")) {
         QMessageBox::critical(this, "Database Error", "Failed to open the database.");
@@ -487,4 +496,43 @@ void MainWindow::onAboutTriggered()
                        "<h2>Password Manager</h2>"
                        "<p>A secure, intuitive, and modern application for managing your credentials locally.</p>"
                        "<p>Built with ❤️ using <b>C++</b> and <b>Qt</b> framework.</p>");
+}
+
+void MainWindow::onCheckPasswordTriggered()
+{
+    QModelIndex current = ui->tableViewPasswords->currentIndex();
+    if (!current.isValid()) {
+        QMessageBox::warning(this, "No Entry Selected", "Please select a password entry to check.");
+        return;
+    }
+
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(current);
+    QString password = m_model->entryAt(sourceIndex.row()).password;
+
+    if (password.isEmpty()) {
+        QMessageBox::warning(this, "Empty Password", "The selected entry does not have a password.");
+        return;
+    }
+    
+    ui->statusBar->showMessage("Checking password security...");
+    qApp->setOverrideCursor(Qt::WaitCursor);
+    m_leakChecker->checkPassword(password);
+}
+
+void MainWindow::onLeakCheckCompleted(bool isLeaked, int count)
+{
+    qApp->restoreOverrideCursor();
+    if (isLeaked) {
+        QMessageBox::warning(this, "Security Alert", QString("This password has been compromised and was found %1 times in known data breaches!\n\nYou should change it immediately.").arg(count));
+    } else {
+        QMessageBox::information(this, "Password Safe", "Good news! This password was not found in any known data breaches.");
+    }
+    updateStatusBar();
+}
+
+void MainWindow::onLeakCheckError(const QString &errorMessage)
+{
+    qApp->restoreOverrideCursor();
+    QMessageBox::critical(this, "Check Failed", "Error checking password security: " + errorMessage);
+    updateStatusBar();
 }

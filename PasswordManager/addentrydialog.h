@@ -6,6 +6,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include "passwordentry.h"
+#include "passwordleakchecker.h"
 
 class AddEntryDialog : public QDialog
 {
@@ -20,6 +21,12 @@ public:
 private:
     void setupUI();
 
+private slots:
+    void onCheckLeakClicked();
+    void onLeakCheckCompleted(bool isLeaked, int count);
+    void onLeakCheckError(const QString &errorMessage);
+
+private:
     QLineEdit   *m_titleEdit;
     QLineEdit   *m_usernameEdit;
     QLineEdit   *m_passwordEdit;
@@ -28,6 +35,11 @@ private:
     QPushButton *m_saveButton;
     QPushButton *m_cancelButton;
     QPushButton *m_togglePasswordButton;
+
+    QPushButton *m_checkLeakButton;
+    QLabel      *m_leakStatusLabel;
+
+    PasswordLeakChecker *m_leakChecker;
 
     int m_entryId = 0;
 };
