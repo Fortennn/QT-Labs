@@ -30,6 +30,8 @@ set(PROJECT_SOURCES
     addentrydialog.h
     passwordleakchecker.cpp
     passwordleakchecker.h
+    passwordbatchworker.cpp
+    passwordbatchworker.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

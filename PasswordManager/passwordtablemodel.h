@@ -18,6 +18,7 @@ public:
         ColWebsite,
         ColCategory,
         ColUpdatedAt,
+        ColSecurityStatus,
         ColCount
     };
 
@@ -35,6 +36,7 @@ public:
     void setRepository(PasswordRepository *repository);
     void updateEntry(int row, const PasswordEntry &entry);
     void removeEntry(int row);
+    void updateSecurityStatus(int id, const QString &status);
     PasswordEntry entryAt(int row) const;
     int nextId() const;
 
