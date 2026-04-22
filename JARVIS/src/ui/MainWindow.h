@@ -5,6 +5,7 @@
 #include <QTextBrowser>
 #include <QLineEdit>
 #include <QBoxLayout>
+#include "../ai/LlamaWorkerThread.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -16,6 +17,7 @@ public:
 private slots:
     void onUserInput();
     void updateAiStream(const QString& token);
+    void onReplyFinished(const QString& fullResponse);
 
 private:
     void setupUi();
@@ -23,6 +25,7 @@ private:
 
     QTextBrowser* chatBrowser;
     QLineEdit* inputField;
+    LlamaWorkerThread* aiThread;
 };
 
 #endif // MAINWINDOW_H

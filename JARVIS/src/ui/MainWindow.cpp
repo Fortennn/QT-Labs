@@ -1,16 +1,27 @@
 #include "MainWindow.h"
 #include <QVBoxLayout>
 #include <QPushButton>
+#include <QScrollBar>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setupUi();
     loadStyles();
     
+    // Ініціалізуємо фоновий AI потік
+    aiThread = new LlamaWorkerThread(this);
+    connect(aiThread, &LlamaWorkerThread::tokenGenerated, this, &MainWindow::updateAiStream);
+    connect(aiThread, &LlamaWorkerThread::replyFinished, this, &MainWindow::onReplyFinished);
+    aiThread->start(); // Запускаємо нескінченний цикл
+    
     resize(800, 600);
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow() {
+    aiThread->stopGeneration();
+    aiThread->quit();
+    aiThread->wait();
+}
 
 void MainWindow::setupUi() {
     QWidget* centralWidget = new QWidget(this);
@@ -75,8 +86,24 @@ void MainWindow::onUserInput() {
     chatBrowser->append("<b style='color: #7289da;'>Ви:</b> " + text);
     inputField->clear();
     
-    chatBrowser->append("<i style='color: #aaaaaa;'>Thinking...</i>");
+    // Вставляємо індикатор початку відповіді JARVIS
+    chatBrowser->append("<b style='color: #eb459e;'>JARVIS:</b> ");
+    
+    // Надсилаємо запит у фоновий потік
+    aiThread->queuePrompt("Ти - розумний асистент.", text);
 }
 
 void MainWindow::updateAiStream(const QString& token) {
+    // Вставляємо токен в існуючий рядок (ефект набору тексту в реальному часі)
+    QTextCursor cursor = chatBrowser->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    chatBrowser->setTextCursor(cursor);
+    chatBrowser->insertPlainText(token);
+    
+    // Прокручуємо чат вниз, якщо текст виходить за межі екрана
+    chatBrowser->verticalScrollBar()->setValue(chatBrowser->verticalScrollBar()->maximum());
+}
+
+void MainWindow::onReplyFinished(const QString& fullResponse) {
+    chatBrowser->append("<br>"); // Невеликий відступ після завершення повідомлення
 }
