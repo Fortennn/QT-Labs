@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(AIAssistant VERSION 1.0.0 LANGUAGES CXX C)
+project(JARVIS VERSION 1.0.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,14 +25,14 @@ FetchContent_MakeAvailable(llama_cpp)
 file(GLOB_RECURSE SRC_FILES "src/*.cpp")
 file(GLOB_RECURSE HDR_FILES "src/*.h")
 
-add_executable(AIAssistant
+add_executable(JARVIS
     ${SRC_FILES}
     ${HDR_FILES}
 )
 
-target_include_directories(AIAssistant PRIVATE src)
+target_include_directories(JARVIS PRIVATE src)
 
-target_link_libraries(AIAssistant PRIVATE
+target_link_libraries(JARVIS PRIVATE
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Gui
     Qt${QT_VERSION_MAJOR}::Widgets

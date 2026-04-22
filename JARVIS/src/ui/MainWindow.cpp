@@ -2,17 +2,29 @@
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QCoreApplication>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setupUi();
     loadStyles();
     
-    // Ініціалізуємо фоновий AI потік
     aiThread = new LlamaWorkerThread(this);
     connect(aiThread, &LlamaWorkerThread::tokenGenerated, this, &MainWindow::updateAiStream);
     connect(aiThread, &LlamaWorkerThread::replyFinished, this, &MainWindow::onReplyFinished);
+    
+    connect(aiThread, &LlamaWorkerThread::errorOccurred, this, [this](const QString& err){
+        chatBrowser->append("<br><b style='color: #f04747;'>[JARVIS SYSTEM ERROR]:</b> " + err);
+    });
+    connect(aiThread, &LlamaWorkerThread::modelLoaded, this, [this](bool success){
+        chatBrowser->append("<b style='color: #43b581;'>[JARVIS SYSTEM]:</b> Нейромережевий мозок успішно підключено та ініціалізовано!");
+    });
+    
     aiThread->start(); // Запускаємо нескінченний цикл
+
+    // Спроба автоматично завантажити модель
+    QString modelPath = QCoreApplication::applicationDirPath() + "/models/dolphin.gguf";
+    aiThread->loadModel(modelPath);
     
     resize(800, 600);
 }

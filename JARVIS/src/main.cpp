@@ -6,7 +6,7 @@
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     
-    QApplication::setApplicationName("AI Portable Assistant");
+    QApplication::setApplicationName("JARVIS");
     QApplication::setApplicationVersion("1.0.0");
 
     QString basePath = QCoreApplication::applicationDirPath();
