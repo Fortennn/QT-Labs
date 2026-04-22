@@ -9,6 +9,10 @@
 AddEntryDialog::AddEntryDialog(QWidget *parent)
     : QDialog(parent)
 {
+    m_leakChecker = new PasswordLeakChecker(this);
+    connect(m_leakChecker, &PasswordLeakChecker::checkCompleted, this, &AddEntryDialog::onLeakCheckCompleted);
+    connect(m_leakChecker, &PasswordLeakChecker::checkError, this, &AddEntryDialog::onLeakCheckError);
+
     setupUI();
 }
 
@@ -68,7 +72,19 @@ void AddEntryDialog::setupUI()
 
     passLayout->addWidget(m_passwordEdit);
     passLayout->addWidget(m_togglePasswordButton);
+    
+    m_checkLeakButton = new QPushButton("Check Security");
+    m_checkLeakButton->setObjectName("checkLeakBtn");
+    m_checkLeakButton->setMinimumHeight(34);
+    connect(m_checkLeakButton, &QPushButton::clicked, this, &AddEntryDialog::onCheckLeakClicked);
+    passLayout->addWidget(m_checkLeakButton);
+    
     form->addRow("Password", passLayout);
+
+    m_leakStatusLabel = new QLabel("");
+    m_leakStatusLabel->setObjectName("leakStatusLabel");
+    m_leakStatusLabel->setWordWrap(true);
+    form->addRow("", m_leakStatusLabel);
 
     m_websiteEdit = new QLineEdit;
     m_websiteEdit->setPlaceholderText("e.g. https://gmail.com");
@@ -207,6 +223,23 @@ void AddEntryDialog::setupUI()
             border: 1px solid #89B4FA;
             color: #CDD6F4;
         }
+
+        QPushButton#checkLeakBtn {
+            background-color: #313244;
+            color: #A6ADC8;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+        QPushButton#checkLeakBtn:hover {
+            background-color: #45475A;
+            color: #CDD6F4;
+        }
+        QPushButton#checkLeakBtn:disabled {
+            background-color: #181825;
+            color: #585B70;
+        }
     )");
 }
 
@@ -239,4 +272,38 @@ void AddEntryDialog::setEditingEntry(const PasswordEntry &entry)
     if (header) {
         header->setText("🔐  Edit Password Entry");
     }
+}
+
+void AddEntryDialog::onCheckLeakClicked()
+{
+    QString pwd = m_passwordEdit->text();
+    if (pwd.isEmpty()) {
+        m_leakStatusLabel->setText("Please enter a password first.");
+        m_leakStatusLabel->setStyleSheet("color: #F38BA8;"); // Red
+        return;
+    }
+    
+    m_checkLeakButton->setEnabled(false);
+    m_leakStatusLabel->setText("Checking password security...");
+    m_leakStatusLabel->setStyleSheet("color: #F9E2AF;"); // Yellow
+    m_leakChecker->checkPassword(pwd);
+}
+
+void AddEntryDialog::onLeakCheckCompleted(bool isLeaked, int count)
+{
+    m_checkLeakButton->setEnabled(true);
+    if (isLeaked) {
+        m_leakStatusLabel->setText(QString("⚠️ Password compromised! Found %1 times in data breaches.").arg(count));
+        m_leakStatusLabel->setStyleSheet("color: #F38BA8;"); // Red
+    } else {
+        m_leakStatusLabel->setText("✅ Password is safe! Not found in known data breaches.");
+        m_leakStatusLabel->setStyleSheet("color: #A6E3A1;"); // Green
+    }
+}
+
+void AddEntryDialog::onLeakCheckError(const QString &errorMessage)
+{
+    m_checkLeakButton->setEnabled(true);
+    m_leakStatusLabel->setText("❌ Error checking password: " + errorMessage);
+    m_leakStatusLabel->setStyleSheet("color: #F38BA8;"); // Red
 }

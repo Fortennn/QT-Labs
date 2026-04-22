@@ -45,6 +45,7 @@ QVariant PasswordTableModel::data(const QModelIndex &index, int role) const
             if (entry.updatedAt.isValid())
                 return entry.updatedAt.toString("yyyy-MM-dd HH:mm");
             return QString();
+        case ColSecurityStatus: return entry.securityStatus;
         }
     }
 
@@ -69,6 +70,7 @@ QVariant PasswordTableModel::headerData(int section, Qt::Orientation orientation
     case ColWebsite:   return "Website";
     case ColCategory:  return "Category";
     case ColUpdatedAt: return "Updated At";
+    case ColSecurityStatus: return "Security Status";
     }
     return {};
 }
@@ -78,7 +80,7 @@ Qt::ItemFlags PasswordTableModel::flags(const QModelIndex &index) const
     if (!index.isValid())
         return Qt::NoItemFlags;
 
-    if (index.column() == ColId || index.column() == ColUpdatedAt)
+    if (index.column() == ColId || index.column() == ColUpdatedAt || index.column() == ColSecurityStatus)
         return Qt::ItemIsSelectable | Qt::ItemIsEnabled;
 
     return Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable;
@@ -147,6 +149,17 @@ void PasswordTableModel::removeEntry(int row)
     beginRemoveRows(QModelIndex(), row, row);
     m_entries.removeAt(row);
     endRemoveRows();
+}
+
+void PasswordTableModel::updateSecurityStatus(int id, const QString &status)
+{
+    for (int i = 0; i < m_entries.size(); ++i) {
+        if (m_entries[i].id == id) {
+            m_entries[i].securityStatus = status;
+            emit dataChanged(index(i, ColSecurityStatus), index(i, ColSecurityStatus), {Qt::DisplayRole});
+            break;
+        }
+    }
 }
 
 PasswordEntry PasswordTableModel::entryAt(int row) const

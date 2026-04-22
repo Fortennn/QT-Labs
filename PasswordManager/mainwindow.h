@@ -5,6 +5,10 @@
 #include "passwordtablemodel.h"
 #include "databasemanager.h"
 #include "passwordrepository.h"
+#include "passwordleakchecker.h"
+#include <QThread>
+#include <QProgressBar>
+#include "passwordbatchworker.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -34,6 +38,16 @@ private slots:
     void onDeleteDBTriggered();
     void onAboutTriggered();
 
+    void onCheckPasswordTriggered();
+    void onLeakCheckCompleted(bool isLeaked, int count);
+    void onLeakCheckError(const QString &errorMessage);
+
+    void onCheckAllTriggered();
+    void onCancelCheckTriggered();
+    void onBatchProgressChanged(int current, int total);
+    void onBatchEntryChecked(int id, bool isLeaked, int count, const QString &err);
+    void onBatchFinished();
+
 private:
     void reloadFromDatabase();
     void applyModernUI();
@@ -43,4 +57,11 @@ private:
     PasswordFilterProxyModel *m_proxyModel;
     DatabaseManager           m_dbManager;
     PasswordRepository    *m_repository = nullptr;
+    PasswordLeakChecker   *m_leakChecker;
+
+    QAction               *m_actionCheckAll;
+    QAction               *m_actionCancelCheck;
+    QProgressBar          *m_progressBar;
+    QThread               *m_batchThread = nullptr;
+    PasswordBatchWorker   *m_batchWorker = nullptr;
 };

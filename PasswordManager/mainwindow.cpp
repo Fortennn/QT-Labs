@@ -20,8 +20,19 @@ MainWindow::MainWindow(QWidget *parent)
 
     QAction *actionNewDB = new QAction("New Database...", this);
     QAction *actionDeleteDB = new QAction("Delete Database...", this);
+    QAction *actionCheckPwd = new QAction("Check Password Security (Single)", this);
+    
+    m_actionCheckAll = new QAction("Check All Passwords (Background)", this);
+    m_actionCancelCheck = new QAction("Cancel Background Check", this);
+    m_actionCancelCheck->setEnabled(false);
+
     ui->menuTools->addAction(actionNewDB);
     ui->menuTools->addAction(actionDeleteDB);
+    ui->menuTools->addSeparator();
+    ui->menuTools->addAction(actionCheckPwd);
+    ui->menuTools->addSeparator();
+    ui->menuTools->addAction(m_actionCheckAll);
+    ui->menuTools->addAction(m_actionCancelCheck);
 
     QAction *actionAbout = new QAction("About Password Manager", this);
     QAction *actionAboutQt = new QAction("About Qt", this);
@@ -30,8 +41,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(actionNewDB, &QAction::triggered, this, &MainWindow::onNewDBTriggered);
     connect(actionDeleteDB, &QAction::triggered, this, &MainWindow::onDeleteDBTriggered);
+    connect(actionCheckPwd, &QAction::triggered, this, &MainWindow::onCheckPasswordTriggered);
+    connect(m_actionCheckAll, &QAction::triggered, this, &MainWindow::onCheckAllTriggered);
+    connect(m_actionCancelCheck, &QAction::triggered, this, &MainWindow::onCancelCheckTriggered);
     connect(actionAbout, &QAction::triggered, this, &MainWindow::onAboutTriggered);
     connect(actionAboutQt, &QAction::triggered, qApp, &QApplication::aboutQt);
+
+    m_leakChecker = new PasswordLeakChecker(this);
+    connect(m_leakChecker, &PasswordLeakChecker::checkCompleted, this, &MainWindow::onLeakCheckCompleted);
+    connect(m_leakChecker, &PasswordLeakChecker::checkError, this, &MainWindow::onLeakCheckError);
+
+    m_progressBar = new QProgressBar(this);
+    m_progressBar->setMaximumWidth(200);
+    m_progressBar->setVisible(false);
+    ui->statusBar->addPermanentWidget(m_progressBar);
 
     if (!m_dbManager.open("passwords.db")) {
         QMessageBox::critical(this, "Database Error", "Failed to open the database.");
@@ -63,6 +86,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->tableViewPasswords->setColumnWidth(PasswordTableModel::ColWebsite,   180);
     ui->tableViewPasswords->setColumnWidth(PasswordTableModel::ColCategory,  100);
     ui->tableViewPasswords->setColumnWidth(PasswordTableModel::ColUpdatedAt, 140);
+    ui->tableViewPasswords->setColumnWidth(PasswordTableModel::ColSecurityStatus, 150);
     ui->tableViewPasswords->verticalHeader()->setVisible(false);
 
     connect(ui->actionNew,          &QAction::triggered, this, &MainWindow::onNewTriggered);
@@ -92,6 +116,11 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    if (m_batchThread && m_batchThread->isRunning()) {
+        m_batchWorker->cancel();
+        m_batchThread->quit();
+        m_batchThread->wait();
+    }
     delete ui;
 }
 
@@ -487,4 +516,122 @@ void MainWindow::onAboutTriggered()
                        "<h2>Password Manager</h2>"
                        "<p>A secure, intuitive, and modern application for managing your credentials locally.</p>"
                        "<p>Built with ❤️ using <b>C++</b> and <b>Qt</b> framework.</p>");
+}
+
+void MainWindow::onCheckPasswordTriggered()
+{
+    QModelIndex current = ui->tableViewPasswords->currentIndex();
+    if (!current.isValid()) {
+        QMessageBox::warning(this, "No Entry Selected", "Please select a password entry to check.");
+        return;
+    }
+
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(current);
+    QString password = m_model->entryAt(sourceIndex.row()).password;
+
+    if (password.isEmpty()) {
+        QMessageBox::warning(this, "Empty Password", "The selected entry does not have a password.");
+        return;
+    }
+    
+    ui->statusBar->showMessage("Checking password security...");
+    qApp->setOverrideCursor(Qt::WaitCursor);
+    m_leakChecker->checkPassword(password);
+}
+
+void MainWindow::onLeakCheckCompleted(bool isLeaked, int count)
+{
+    qApp->restoreOverrideCursor();
+    if (isLeaked) {
+        QMessageBox::warning(this, "Security Alert", QString("This password has been compromised and was found %1 times in known data breaches!\n\nYou should change it immediately.").arg(count));
+    } else {
+        QMessageBox::information(this, "Password Safe", "Good news! This password was not found in any known data breaches.");
+    }
+    updateStatusBar();
+}
+
+void MainWindow::onLeakCheckError(const QString &errorMessage)
+{
+    qApp->restoreOverrideCursor();
+    QMessageBox::critical(this, "Check Failed", "Error checking password security: " + errorMessage);
+    updateStatusBar();
+}
+
+void MainWindow::onCheckAllTriggered()
+{
+    if (m_batchThread && m_batchThread->isRunning()) {
+        QMessageBox::warning(this, "Already Running", "A background check is already running.");
+        return;
+    }
+
+    if (!m_repository) return;
+    QList<PasswordEntry> entries = m_repository->loadAll();
+    
+    // clear existing statuses in UI
+    for (int i = 0; i < entries.size(); ++i) {
+        m_model->updateSecurityStatus(entries[i].id, "?");
+    }
+
+    m_progressBar->setValue(0);
+    m_progressBar->setMaximum(entries.size());
+    m_progressBar->setVisible(true);
+
+    m_actionCheckAll->setEnabled(false);
+    m_actionCancelCheck->setEnabled(true);
+    ui->statusBar->showMessage("Starting background check...");
+
+    m_batchThread = new QThread(this);
+    m_batchWorker = new PasswordBatchWorker(entries);
+    m_batchWorker->moveToThread(m_batchThread);
+
+    connect(m_batchThread, &QThread::started, m_batchWorker, &PasswordBatchWorker::processAll);
+    connect(m_batchWorker, &PasswordBatchWorker::progressChanged, this, &MainWindow::onBatchProgressChanged);
+    connect(m_batchWorker, &PasswordBatchWorker::entryChecked, this, &MainWindow::onBatchEntryChecked);
+    connect(m_batchWorker, &PasswordBatchWorker::finished, m_batchThread, &QThread::quit);
+    connect(m_batchThread, &QThread::finished, m_batchWorker, &QObject::deleteLater);
+    connect(m_batchWorker, &PasswordBatchWorker::finished, this, &MainWindow::onBatchFinished);
+
+    m_batchThread->start();
+}
+
+void MainWindow::onCancelCheckTriggered()
+{
+    if (m_batchWorker) {
+        m_batchWorker->cancel();
+        ui->statusBar->showMessage("Canceling background check...", 3000);
+        m_actionCancelCheck->setEnabled(false);
+    }
+}
+
+void MainWindow::onBatchProgressChanged(int current, int total)
+{
+    m_progressBar->setMaximum(total);
+    m_progressBar->setValue(current);
+}
+
+void MainWindow::onBatchEntryChecked(int id, bool isLeaked, int count, const QString &err)
+{
+    QString status;
+    if (!err.isEmpty()) {
+        status = "Error";
+    } else if (isLeaked) {
+        status = QString("Leaked (%1)").arg(count);
+    } else {
+        status = "Safe";
+    }
+    
+    m_model->updateSecurityStatus(id, status);
+}
+
+void MainWindow::onBatchFinished()
+{
+    m_progressBar->setVisible(false);
+    m_actionCheckAll->setEnabled(true);
+    m_actionCancelCheck->setEnabled(false);
+    ui->statusBar->showMessage("Background check finished.", 5000);
+    
+    // The thread and worker are scheduled for deletion, just clean up pointers
+    m_batchThread->deleteLater();
+    m_batchThread = nullptr;
+    m_batchWorker = nullptr;
 }

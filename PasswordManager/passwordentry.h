@@ -12,4 +12,5 @@ struct PasswordEntry
     QString website;
     QString category;
     QDateTime updatedAt;
+    QString securityStatus = "?";
 };
