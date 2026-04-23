@@ -10,21 +10,23 @@ MainWindow::MainWindow(QWidget *parent)
     loadStyles();
     
     aiThread = new LlamaWorkerThread(this);
-    connect(aiThread, &LlamaWorkerThread::tokenGenerated, this, &MainWindow::updateAiStream);
-    connect(aiThread, &LlamaWorkerThread::replyFinished, this, &MainWindow::onReplyFinished);
+    connect(aiThread, &LlamaWorkerThread::tokenGenerated, this, &MainWindow::updateAiStream, Qt::QueuedConnection);
+    connect(aiThread, &LlamaWorkerThread::replyFinished, this, &MainWindow::onReplyFinished, Qt::QueuedConnection);
     
     connect(aiThread, &LlamaWorkerThread::errorOccurred, this, [this](const QString& err){
         chatBrowser->append("<br><b style='color: #f04747;'>[JARVIS SYSTEM ERROR]:</b> " + err);
-    });
+    }, Qt::QueuedConnection);
     connect(aiThread, &LlamaWorkerThread::modelLoaded, this, [this](bool success){
         chatBrowser->append("<b style='color: #43b581;'>[JARVIS SYSTEM]:</b> Нейромережевий мозок успішно підключено та ініціалізовано!");
-    });
+    }, Qt::QueuedConnection);
     
+    // llama.cpp вимагає великого стеку, стандартних 2 МБ в MinGW може не вистачити і потік просто "тихо" впаде
+    aiThread->setStackSize(16 * 1024 * 1024); // 16 Мегабайт
     aiThread->start(); // Запускаємо нескінченний цикл
 
-    // Спроба автоматично завантажити модель
-    QString modelPath = QCoreApplication::applicationDirPath() + "/models/dolphin.gguf";
-    aiThread->loadModel(modelPath);
+    // Вказуємо абсолютний шлях до папки з моделлю (для зручності під час розробки)
+    QString modelPath = "C:/Papki/qt-labs/JARVIS/models/dolphin.gguf";
+    aiThread->queueLoadModel(modelPath);
     
     resize(800, 600);
 }

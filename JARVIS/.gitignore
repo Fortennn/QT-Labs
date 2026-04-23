@@ -1,18 +1,27 @@
+# Build directories
 build/
-cmake-build-*/
-out/
 bin/
-*.obj
-*.exe
-*.dll
-.idea/
+obj/
+out/
+.cmake/
+
+# Models (too large for Git)
+models/*.gguf
+models/*.bin
+
+# Temporary files
+llama_prebuilt.zip
+*.tmp
+*.log
+
+# IDE files
 .vscode/
+.idea/
 *.user
-*.gguf
-*.bin
-config.json
-database/
-logs/
-prompts/*.txt
-.DS_Store
+*.suo
+*.userOSSC
+*.sln.docuser
+
+# OS files
 Thumbs.db
+.DS_Store

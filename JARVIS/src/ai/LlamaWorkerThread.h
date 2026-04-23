@@ -18,6 +18,7 @@ public:
     ~LlamaWorkerThread() override;
 
     bool loadModel(const QString& modelPath);
+    void queueLoadModel(const QString& modelPath);
     void queuePrompt(const QString& systemPrompt, const QString& userPrompt);
     void stopGeneration();
 
@@ -42,6 +43,7 @@ private:
         QString userPrompt;
     };
     QQueue<Request> m_requests;
+    QString m_modelPathToLoad;
 
     bool m_stopRequested = false;
     bool m_quitThread = false;
