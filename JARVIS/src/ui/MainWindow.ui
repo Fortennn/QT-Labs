@@ -6,15 +6,18 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>900</width>
-    <height>700</height>
+    <width>1100</width>
+    <height>800</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>JARVIS AI Assistant</string>
+   <string>JARVIS CORE</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QMainWindow { background-color: #010409; }</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QHBoxLayout" name="horizontalLayout">
     <property name="spacing">
      <number>0</number>
     </property>
@@ -31,124 +34,106 @@
      <number>0</number>
     </property>
     <item>
-     <widget class="QFrame" name="mainFrame">
-      <property name="styleSheet">
-       <string notr="true">QFrame#mainFrame { background-color: #0b0f19; }</string>
+     <widget class="QFrame" name="sidePanel">
+      <property name="minimumSize">
+       <size>
+        <width>280</width>
+        <height>0</height>
+       </size>
       </property>
-      <layout class="QVBoxLayout" name="frameLayout">
+      <property name="maximumSize">
+       <size>
+        <width>280</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QFrame#sidePanel {
+    background-color: #010409;
+    border-right: 1px solid #1f6feb;
+}
+QPushButton {
+    background-color: rgba(33, 38, 45, 150);
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    border-color: #58a6ff;
+    background-color: rgba(88, 166, 255, 30);
+    color: white;
+}
+QLabel {
+    color: #58a6ff;
+    font-family: 'Segoe UI Semibold';
+    letter-spacing: 1px;
+}</string>
+      </property>
+      <layout class="QVBoxLayout" name="sideLayout">
        <property name="spacing">
-        <number>15</number>
-       </property>
-       <property name="leftMargin">
-        <number>20</number>
-       </property>
-       <property name="topMargin">
-        <number>20</number>
-       </property>
-       <property name="rightMargin">
-        <number>20</number>
-       </property>
-       <property name="bottomMargin">
         <number>20</number>
        </property>
        <item>
-        <widget class="QTextBrowser" name="chatBrowser">
-         <property name="styleSheet">
-          <string notr="true">QTextBrowser { 
-    background-color: transparent; 
-    color: #d2d6df; 
-    border: none;
-    font-size: 15px;
-    font-family: 'Segoe UI', Inter, sans-serif;
-}</string>
+        <widget class="QFrame" name="brainContainer">
+         <property name="minimumSize">
+          <size>
+           <width>250</width>
+           <height>250</height>
+          </size>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QFrame" name="inputContainer">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>60</height>
-          </size>
+        <spacer name="spacer1">
+         <property name="orientation">
+          <set>Qt::Vertical</set>
          </property>
-         <property name="maximumSize">
-          <size>
-           <width>16777215</width>
-           <height>60</height>
-          </size>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_clear">
+         <property name="text">
+          <string>Clear Memory</string>
          </property>
-         <property name="styleSheet">
-          <string notr="true">QFrame#inputContainer {
-    background-color: #151a28;
-    border: 1px solid #2d3446;
-    border-radius: 25px;
-}</string>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_settings">
+         <property name="text">
+          <string>Settings</string>
          </property>
-         <layout class="QHBoxLayout" name="inputLayout">
-          <property name="spacing">
-           <number>10</number>
-          </property>
-          <property name="leftMargin">
-           <number>15</number>
-          </property>
-          <property name="topMargin">
-           <number>5</number>
-          </property>
-          <property name="rightMargin">
-           <number>5</number>
-          </property>
-          <property name="bottomMargin">
-           <number>5</number>
-          </property>
-          <item>
-           <widget class="QLineEdit" name="inputField">
-            <property name="styleSheet">
-             <string notr="true">QLineEdit {
-    background: transparent;
-    border: none;
-    color: #c9d1d9;
-    font-size: 15px;
-    selection-background-color: #5865f2;
-}</string>
-            </property>
-            <property name="placeholderText">
-             <string>Введіть запит до JARVIS...</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="sendButton">
-            <property name="minimumSize">
-             <size>
-              <width>80</width>
-              <height>40</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QPushButton {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #5865f2, stop:1 #8e44ad);
-    color: white;
-    border-radius: 20px;
-    font-weight: bold;
-    font-size: 14px;
-}
-QPushButton:hover {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4752c4, stop:1 #9b59b6);
-}
-QPushButton:pressed {
-    background-color: #5865f2;
-}</string>
-            </property>
-            <property name="text">
-             <string>Send</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacer2">
+         <property name="orientation">
+          <set>Qt::Vertical</set>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_status">
+         <property name="text">
+          <string>SYSTEM STATUS: ONLINE</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
         </widget>
        </item>
       </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QFrame" name="mainArea">
+      <property name="styleSheet">
+       <string notr="true">QFrame#mainArea { background-color: #010409; }</string>
+      </property>
      </widget>
     </item>
    </layout>

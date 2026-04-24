@@ -33,6 +33,13 @@ add_executable(JARVIS
     ${UI_FILES}
 )
 
+target_include_directories(JARVIS PRIVATE
+    src
+    src/ui
+    src/ui/widgets
+    src/ai
+)
+
 # Хедери з вихідного коду
 target_include_directories(JARVIS PRIVATE 
     src 
