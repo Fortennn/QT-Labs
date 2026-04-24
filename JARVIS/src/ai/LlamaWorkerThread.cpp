@@ -60,7 +60,7 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
 
     auto cparams = llama_context_default_params();
     cparams.n_ctx = 2048;
-    cparams.n_batch = 512;
+    cparams.n_batch = 2048; // Повинно бути >= максимальній довжині промпту
     // Використовуємо всі доступні ядра CPU
     int cpuThreads = QThread::idealThreadCount();
     qDebug() << "[JARVIS CORE] Використовую потоків:" << cpuThreads;
@@ -98,6 +98,12 @@ void LlamaWorkerThread::stopGeneration() {
     m_stopRequested = true;
 }
 
+void LlamaWorkerThread::clearHistory() {
+    QMutexLocker locker(&m_mutex);
+    m_history.clear();
+    qDebug() << "[JARVIS CORE] Пам'ять очищена.";
+}
+
 void LlamaWorkerThread::run() {
     while (true) {
         Request req;
@@ -131,15 +137,21 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
         return;
     }
 
-    // Форматуємо промпт за стандартом ChatML (ідеально для Llama-3 і Dolphin)
-    QString formattedPrompt = QString(
-        "<|im_start|>system\n%1<|im_end|>\n"
-        "<|im_start|>user\n%2<|im_end|>\n"
-        "<|im_start|>assistant\n")
-        .arg(req.systemPrompt)
-        .arg(req.userPrompt);
+    // Форматуємо промпт за стандартом ChatML з урахуванням історії
+    QString promptStr = QString("<|im_start|>system\n%1<|im_end|>\n").arg(req.systemPrompt);
+    
+    // Додаємо минулі повідомлення (обмежуємо останніми 10 для стабільності)
+    int historyStart = qMax(0, m_history.size() - 10);
+    for (int i = historyStart; i < m_history.size(); ++i) {
+        promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(m_history[i].user);
+        promptStr += QString("<|im_start|>assistant\n%1<|im_end|>\n").arg(m_history[i].assistant);
+    }
+    
+    // Додаємо поточне повідомлення
+    promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(req.userPrompt);
+    promptStr += "<|im_start|>assistant\n";
 
-    std::string prompt = formattedPrompt.toStdString();
+    std::string prompt = promptStr.toStdString();
     qDebug() << "[GEN] \u0421\u0422\u0410\u0420\u0422. \u0414\u043e\u0432\u0436\u0438\u043d\u0430 \u043f\u0440\u043e\u043c\u043f\u0442\u0443:" << prompt.length() << "\u0441\u0438\u043c\u0432\u043e\u043b\u0456\u0432";
 
     // b4827+: \u0442\u043e\u043a\u0435\u043d\u0456\u0437\u0430\u0446\u0456\u044f \u0447\u0435\u0440\u0435\u0437 llama_vocab
@@ -178,8 +190,8 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
 
     // Покращене налаштування семплерів для стабільності та уникнення "галюцинацій"
     llama_sampler * sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7f));         // Трохи менше хаосу
-    llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.05f, 1));   // Відсікає малоймовірне сміття (чеську мову тощо)
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.8f));         // Трохи більше 'творчості'
+    llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.1f, 1));    // Суворіше відсікаємо сміття та змішування мов
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
@@ -216,7 +228,14 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
         n_cur++;
     }
 
-    qDebug() << "[GEN] \u0426\u0438\u043a\u043b \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e. \u0412\u0456\u0434\u043f\u043e\u0432\u0456\u0434\u044c:" << fullResponse.left(50);
+    qDebug() << "[GEN] Цикл завершено. Відповідь:" << fullResponse.left(50);
     llama_sampler_free(sampler);
+
+    // Зберігаємо цей поворот діалогу в пам'ять
+    {
+        QMutexLocker locker(&m_mutex);
+        m_history.append({req.userPrompt, fullResponse.trimmed()});
+    }
+
     emit replyFinished(fullResponse);
 }

@@ -6,6 +6,7 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QQueue>
+#include <QList>
 
 struct llama_model;
 struct llama_context;
@@ -21,6 +22,7 @@ public:
     void queueLoadModel(const QString& modelPath);
     void queuePrompt(const QString& systemPrompt, const QString& userPrompt);
     void stopGeneration();
+    void clearHistory();
 
 signals:
     void modelLoaded(bool success);
@@ -38,6 +40,12 @@ private:
     QMutex m_mutex;
     QWaitCondition m_cond;
     
+    struct ChatTurn {
+        QString user;
+        QString assistant;
+    };
+    QList<ChatTurn> m_history;
+
     struct Request {
         QString systemPrompt;
         QString userPrompt;

@@ -25,10 +25,12 @@ FetchContent_MakeAvailable(llama_cpp_headers)
 
 file(GLOB_RECURSE SRC_FILES "src/*.cpp")
 file(GLOB_RECURSE HDR_FILES "src/*.h")
+file(GLOB_RECURSE UI_FILES "src/*.ui")
 
 add_executable(JARVIS
     ${SRC_FILES}
     ${HDR_FILES}
+    ${UI_FILES}
 )
 
 # Хедери з вихідного коду

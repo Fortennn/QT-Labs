@@ -7,6 +7,8 @@
 #include <QBoxLayout>
 #include "../ai/LlamaWorkerThread.h"
 
+namespace Ui { class MainWindow; }
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -20,11 +22,7 @@ private slots:
     void onReplyFinished(const QString& fullResponse);
 
 private:
-    void setupUi();
-    void loadStyles();
-
-    QTextBrowser* chatBrowser;
-    QLineEdit* inputField;
+    Ui::MainWindow *ui;
     LlamaWorkerThread* aiThread;
 };
 
