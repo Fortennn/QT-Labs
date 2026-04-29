@@ -65,7 +65,7 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     int contextSize;
     {
         QMutexLocker locker(&m_mutex);
-        contextSize = m_contextSize;
+        contextSize = m_gen.contextSize;
     }
 
     auto cparams = llama_context_default_params();
@@ -92,8 +92,35 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
 
 void LlamaWorkerThread::setParams(float temperature, int contextSize) {
     QMutexLocker locker(&m_mutex);
-    m_temperature = temperature;
-    m_contextSize = contextSize;
+    m_gen.temperature = temperature;
+    if (contextSize >= 512) m_gen.contextSize = contextSize;
+}
+
+void LlamaWorkerThread::setGenParams(const GenParams& params) {
+    QMutexLocker locker(&m_mutex);
+    m_gen = params;
+    if (m_gen.contextSize < 512)  m_gen.contextSize  = 512;
+    if (m_gen.maxTokens   < 32)   m_gen.maxTokens    = 32;
+    if (m_gen.topK        < 1)    m_gen.topK         = 1;
+    if (m_gen.topP        <= 0.f) m_gen.topP         = 0.95f;
+    if (m_gen.minP        < 0.f)  m_gen.minP         = 0.f;
+    if (m_gen.repeatPenalty <= 0.f) m_gen.repeatPenalty = 1.f;
+    if (m_gen.temperature  < 0.f) m_gen.temperature  = 0.f;
+}
+
+LlamaWorkerThread::GenParams LlamaWorkerThread::genParams() const {
+    QMutexLocker locker(&m_mutex);
+    return m_gen;
+}
+
+void LlamaWorkerThread::setSystemPromptOverride(const QString& override) {
+    QMutexLocker locker(&m_mutex);
+    m_systemPromptOverride = override;
+}
+
+QString LlamaWorkerThread::systemPromptOverride() const {
+    QMutexLocker locker(&m_mutex);
+    return m_systemPromptOverride;
 }
 
 void LlamaWorkerThread::queueLoadModel(const QString& modelPath) {
@@ -153,7 +180,17 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
         return;
     }
 
-    QString promptStr = QString("<|im_start|>system\n%1<|im_end|>\n").arg(req.systemPrompt);
+    QString systemPrompt;
+    GenParams gen;
+    {
+        QMutexLocker locker(&m_mutex);
+        gen = m_gen;
+        systemPrompt = m_systemPromptOverride.isEmpty()
+                           ? req.systemPrompt
+                           : m_systemPromptOverride;
+    }
+
+    QString promptStr = QString("<|im_start|>system\n%1<|im_end|>\n").arg(systemPrompt);
 
     int historyStart = qMax(0, m_history.size() - 10);
     for (int i = historyStart; i < m_history.size(); ++i) {
@@ -192,24 +229,24 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
         return;
     }
 
-    float generationTemperature;
-    {
-        QMutexLocker locker(&m_mutex);
-        generationTemperature = m_temperature;
-    }
-
     llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(generationTemperature));
-    llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.1f, 1));
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
+    // Repeat-penalty applied first so subsequent samplers narrow the field.
+    llama_sampler_chain_add(sampler,
+        llama_sampler_init_penalties(/*last_n=*/64,
+                                     /*repeat=*/  gen.repeatPenalty,
+                                     /*freq=*/    0.0f,
+                                     /*present=*/ 0.0f));
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(gen.topK));
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(gen.topP, 1));
+    llama_sampler_chain_add(sampler, llama_sampler_init_min_p(gen.minP, 1));
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(gen.temperature));
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
     QString fullResponse;
     bool insideTag = false;
-    constexpr int kMaxGeneratedTokens = 1024;
+    const int maxGeneratedTokens = qMax(32, gen.maxTokens);
 
-    for (int i = 0; i < kMaxGeneratedTokens; ++i) {
+    for (int i = 0; i < maxGeneratedTokens; ++i) {
         {
             QMutexLocker locker(&m_mutex);
             if (m_stopRequested) {

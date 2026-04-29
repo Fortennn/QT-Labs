@@ -6,6 +6,8 @@
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     
+    QApplication::setOrganizationName("JARVIS");
+    QApplication::setOrganizationDomain("jarvis.local");
     QApplication::setApplicationName("JARVIS");
     QApplication::setApplicationVersion("1.0.0");
 

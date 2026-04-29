@@ -1,12 +1,12 @@
 #ifndef LLAMA_WORKER_THREAD_H
 #define LLAMA_WORKER_THREAD_H
 
-#include <QThread>
-#include <QString>
-#include <QMutex>
-#include <QWaitCondition>
-#include <QQueue>
 #include <QList>
+#include <QMutex>
+#include <QQueue>
+#include <QString>
+#include <QThread>
+#include <QWaitCondition>
 
 struct llama_model;
 struct llama_context;
@@ -15,11 +15,38 @@ class LlamaWorkerThread : public QThread {
     Q_OBJECT
 
 public:
-    explicit LlamaWorkerThread(QObject *parent = nullptr);
+    // Tunable generation parameters. Mirror the llama.cpp sampler chain
+    // configured in processGeneration().
+    struct GenParams {
+        float temperature   = 0.80f;
+        float topP          = 0.95f;
+        int   topK          = 40;
+        float minP          = 0.10f;
+        float repeatPenalty = 1.10f;
+        int   maxTokens     = 1024;
+        int   contextSize   = 2048;
+    };
+
+    explicit LlamaWorkerThread(QObject* parent = nullptr);
     ~LlamaWorkerThread() override;
 
     bool loadModel(const QString& modelPath);
+
+    // Legacy two-knob setter — still used by older call sites.
+    // Equivalent to copying the current params, overwriting these two
+    // fields, and forwarding to setGenParams().
     void setParams(float temperature, int contextSize);
+
+    // Update *all* generation knobs at once. Picked up on the next
+    // processGeneration() invocation; contextSize on the next loadModel().
+    void setGenParams(const GenParams& params);
+    GenParams genParams() const;
+
+    // Override the system prompt sent to the model. Empty -> use whatever
+    // the caller passes to queuePrompt() / Config::SYSTEM_PROMPT.
+    void setSystemPromptOverride(const QString& override);
+    QString systemPromptOverride() const;
+
     void queueLoadModel(const QString& modelPath);
     void queuePrompt(const QString& systemPrompt, const QString& userPrompt);
     void stopGeneration();
@@ -35,12 +62,12 @@ protected:
     void run() override;
 
 private:
-    llama_model* m_model = nullptr;
-    llama_context* m_ctx = nullptr;
+    llama_model*   m_model = nullptr;
+    llama_context* m_ctx   = nullptr;
 
-    QMutex m_mutex;
+    mutable QMutex m_mutex;
     QWaitCondition m_cond;
-    
+
     struct ChatTurn {
         QString user;
         QString assistant;
@@ -54,12 +81,12 @@ private:
     QQueue<Request> m_requests;
     QString m_modelPathToLoad;
 
-    float m_temperature = 0.8f;
-    int m_contextSize = 2048;
+    GenParams m_gen;                  // protected by m_mutex
+    QString   m_systemPromptOverride; // protected by m_mutex
 
     bool m_stopRequested = false;
-    bool m_quitThread = false;
-    
+    bool m_quitThread    = false;
+
     void processGeneration(const Request& req);
 };
 
