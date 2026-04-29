@@ -36,9 +36,18 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QAbstractAnimation>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QSaveFile>
 #include <QSettings>
 #include <QStackedLayout>
+#include <QUuid>
 #include <QWheelEvent>
+
+#include "ChatHistoryDialog.h"
 #include <QStandardPaths>
 #include <QStyle>
 #include <QString>
@@ -482,6 +491,13 @@ MainWindow::MainWindow(QWidget* parent)
 
     applyPremiumStyles();
 
+    // The MainWindow.ui hard-codes a per-widget stylesheet on `sidePanel`
+    // with `border-right: 1px solid #1f6feb;` — that local stylesheet wins
+    // over the global one applied in applyPremiumStyles(), so the blue
+    // stripe stayed visible. Wipe the per-widget rule so our global rule
+    // (no accent border) takes effect.
+    if (ui->sidePanel) ui->sidePanel->setStyleSheet(QString());
+
     // 0. Onboarding (first run): ask the user for a display name. Persisted via
     // QSettings, so subsequent launches skip the dialog entirely.
     {
@@ -516,14 +532,11 @@ MainWindow::MainWindow(QWidget* parent)
     // 4. AI worker thread
     aiThread = new LlamaWorkerThread(this);
 
+    // "Новий чат" — saves the current conversation to disk (if not empty)
+    // and starts a fresh one.
+    ui->btn_clear->setText(QStringLiteral("Новий чат"));
     connect(ui->btn_clear, &QPushButton::clicked, this, [this]() {
-        aiThread->clearHistory();
-        QLayoutItem* child = nullptr;
-        while ((child = chatLayout->takeAt(0)) != nullptr) {
-            if (child->widget()) delete child->widget();
-            delete child;
-        }
-        chatLayout->addStretch();
+        newChat(/*persistOld=*/true);
     });
 
     connect(ui->btn_settings, &QPushButton::clicked, this, [this]() {
@@ -590,6 +603,9 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 MainWindow::~MainWindow() {
+    // Persist whatever the user typed before we tear everything down.
+    saveCurrentChat();
+
     if (aiThread) {
         aiThread->stopGeneration();
         aiThread->quit();
@@ -635,7 +651,6 @@ void MainWindow::applyPremiumStyles() {
                 x1:0, y1:0, x2:0, y2:1,
                 stop:0 #0d141d, stop:1 #07101b);
             border: none;
-            border-right: 1px solid rgba(47, 129, 247, 35);
         }
         QFrame#sidePanel QLabel {
             color: #8a99b1;
@@ -972,8 +987,45 @@ void MainWindow::buildSidebar() {
     modelLay->addWidget(sidebarModelLabel);
     ui->sideLayout->insertWidget(2, modelCard);
 
-    // ---- 3. (No standalone Stop button — the Send button morphs into Stop
-    //          while generating. See setGenerating().) ----
+    // ---- 3. "Історія чатів" sidebar button (programmatically added). ----------
+    btnHistory = new QPushButton(QStringLiteral("Історія чатів"), this);
+    btnHistory->setObjectName(QStringLiteral("btn_history"));
+    btnHistory->setCursor(Qt::PointingHandCursor);
+    btnHistory->setMinimumHeight(40);
+    btnHistory->setStyleSheet(QStringLiteral(R"_(
+        QPushButton#btn_history {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #182336, stop:1 #0e1626);
+            color: #d1d7df;
+            border: 1px solid #2a3a52;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 12.5px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        QPushButton#btn_history:hover {
+            border-color: #2f81f7;
+            color: #ffffff;
+        }
+        QPushButton#btn_history:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #2f81f7, stop:1 #1d6def);
+            color: #ffffff;
+        }
+    )_"));
+    {
+        // Place it just below btn_clear so the order is: Новий чат → Історія
+        //  → Налаштування.
+        const int insertAt =
+            ui->sideLayout->indexOf(ui->btn_clear) + 1;
+        ui->sideLayout->insertWidget(insertAt, btnHistory);
+    }
+    connect(btnHistory, &QPushButton::clicked,
+            this, &MainWindow::openChatHistoryDialog);
+
+    // No standalone Stop button — the Send button morphs into Stop while
+    // generating. See setGenerating().
 
     // ---- 4. Status / telemetry card at the very bottom -----------------------
     // We wrap the existing label_status into a polished frame + add a
@@ -1039,19 +1091,14 @@ void MainWindow::buildSidebar() {
         row->setSpacing(10);
 
         userChipAvatar = new QLabel(userChip);
-        userChipAvatar->setFixedSize(34, 34);
+        userChipAvatar->setFixedSize(38, 38);
         userChipAvatar->setAlignment(Qt::AlignCenter);
-        userChipAvatar->setStyleSheet(QStringLiteral(
-            "color: #ffffff; font-size: 13px; font-weight: 800; "
-            "letter-spacing: 1px; "
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "  stop:0 #2f81f7, stop:1 #1d6def); "
-            "border: 1px solid rgba(255,255,255,40); "
-            "border-radius: 17px;"));
+        // Visuals are set by refreshUserChip() (initials gradient OR
+        // a circular crop of the user's saved avatar).
 
         auto* col = new QVBoxLayout;
-        col->setSpacing(0);
-        col->setContentsMargins(0, 0, 0, 0);
+        col->setSpacing(2);
+        col->setContentsMargins(0, 1, 0, 1);
 
         auto* eyebrow = new QLabel(QStringLiteral("КОРИСТУВАЧ"), userChip);
         eyebrow->setStyleSheet(QStringLiteral(
@@ -1063,8 +1110,10 @@ void MainWindow::buildSidebar() {
             "color: #e6edf3; font-size: 12.5px; font-weight: 700; "
             "letter-spacing: 0.4px;"));
 
+        col->addStretch();
         col->addWidget(eyebrow);
         col->addWidget(userChipName);
+        col->addStretch();
 
         row->addWidget(userChipAvatar, 0, Qt::AlignVCenter);
         row->addLayout(col, 1);
@@ -1219,9 +1268,31 @@ void MainWindow::refreshUserChip() {
     if (name.isEmpty()) name = QStringLiteral("YOU");
     userChipName->setText(name);
 
-    if (userChipAvatar) {
-        // First letter as a tiny avatar glyph.
+    if (!userChipAvatar) return;
+
+    const int side = userChipAvatar->width();
+    const int radius = side / 2;
+
+    // Prefer the user-supplied avatar. Round-mask + halo + ring are baked
+    // into the bitmap (see WelcomeDialog::roundAvatar), so the QLabel
+    // itself renders nothing extra — no square border bleeding outside
+    // the circle.
+    QPixmap pix = WelcomeDialog::savedAvatar(side);
+    if (!pix.isNull()) {
+        userChipAvatar->setPixmap(WelcomeDialog::roundAvatar(pix, side));
+        userChipAvatar->setText(QString());
+        userChipAvatar->setStyleSheet(QStringLiteral(
+            "background: transparent; border: none;"));
+    } else {
+        userChipAvatar->setPixmap(QPixmap());
         userChipAvatar->setText(name.left(1).toUpper());
+        userChipAvatar->setStyleSheet(QStringLiteral(
+            "color: #ffffff; font-size: 14px; font-weight: 800; "
+            "letter-spacing: 1px; "
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "  stop:0 #2f81f7, stop:1 #1d6def); "
+            "border: 1px solid rgba(255,255,255,40); "
+            "border-radius: %1px;").arg(radius));
     }
 }
 
@@ -1250,6 +1321,144 @@ void MainWindow::addMessage(const QString& text, bool isUser) {
 }
 
 // =============================================================================
+//  Chat history persistence
+// =============================================================================
+
+void MainWindow::clearChatLayout() {
+    if (!chatLayout) return;
+    QLayoutItem* child = nullptr;
+    while ((child = chatLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) delete child->widget();
+        delete child;
+    }
+    chatLayout->addStretch();
+}
+
+void MainWindow::newChat(bool persistOld) {
+    if (persistOld && !m_currentMessages.isEmpty()) {
+        saveCurrentChat();
+    }
+
+    if (aiThread) aiThread->clearHistory();
+    clearChatLayout();
+    m_currentMessages.clear();
+    m_currentAiText.clear();
+    currentAiBubble    = nullptr;
+    m_currentChatId    = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    m_currentChatTitle.clear();
+}
+
+void MainWindow::appendUserMessage(const QString& text) {
+    if (m_currentChatId.isEmpty()) {
+        m_currentChatId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
+    addMessage(text, /*isUser=*/true);
+    m_currentMessages.push_back({true, text, QDateTime::currentDateTime()});
+
+    // Use the first user message as the chat title.
+    if (m_currentChatTitle.isEmpty()) {
+        QString trimmed = text.simplified();
+        if (trimmed.length() > 60) trimmed = trimmed.left(58) + QStringLiteral("…");
+        m_currentChatTitle = trimmed;
+    }
+    saveCurrentChat();
+}
+
+void MainWindow::appendAiMessage(const QString& text) {
+    // The bubble is already on screen — we only persist the text for history.
+    m_currentMessages.push_back({false, text, QDateTime::currentDateTime()});
+    saveCurrentChat();
+}
+
+void MainWindow::saveCurrentChat() const {
+    if (m_currentChatId.isEmpty() || m_currentMessages.isEmpty()) return;
+
+    QJsonArray msgs;
+    for (const StoredMessage& m : m_currentMessages) {
+        QJsonObject o;
+        o.insert(QStringLiteral("role"),
+                 m.isUser ? QStringLiteral("user") : QStringLiteral("ai"));
+        o.insert(QStringLiteral("text"), m.text);
+        o.insert(QStringLiteral("time"), m.time.toString(Qt::ISODate));
+        msgs.append(o);
+    }
+
+    QJsonObject root;
+    root.insert(QStringLiteral("title"),
+                m_currentChatTitle.isEmpty()
+                    ? QStringLiteral("Без назви") : m_currentChatTitle);
+    root.insert(QStringLiteral("updatedAt"),
+                QDateTime::currentDateTime().toString(Qt::ISODate));
+    root.insert(QStringLiteral("messages"), msgs);
+
+    QSaveFile file(ChatHistoryDialog::chatFilePath(m_currentChatId));
+    if (!file.open(QIODevice::WriteOnly)) return;
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    file.commit();
+}
+
+void MainWindow::loadChatById(const QString& id) {
+    QFile f(ChatHistoryDialog::chatFilePath(id));
+    if (!f.open(QIODevice::ReadOnly)) return;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if (!doc.isObject()) return;
+
+    // Persist whatever is currently on screen first, then swap.
+    if (!m_currentMessages.isEmpty() && m_currentChatId != id) {
+        saveCurrentChat();
+    }
+
+    if (aiThread) aiThread->clearHistory();
+    clearChatLayout();
+    m_currentMessages.clear();
+    m_currentAiText.clear();
+    currentAiBubble = nullptr;
+
+    const QJsonObject root = doc.object();
+    m_currentChatId    = id;
+    m_currentChatTitle = root.value(QStringLiteral("title")).toString();
+
+    const QJsonArray msgs = root.value(QStringLiteral("messages")).toArray();
+    for (const QJsonValue& v : msgs) {
+        const QJsonObject m = v.toObject();
+        const bool isUser = m.value(QStringLiteral("role")).toString() ==
+                            QStringLiteral("user");
+        const QString text = m.value(QStringLiteral("text")).toString();
+        addMessage(text, isUser);
+        m_currentMessages.push_back({
+            isUser, text,
+            QDateTime::fromString(m.value(QStringLiteral("time")).toString(),
+                                  Qt::ISODate)
+        });
+    }
+}
+
+void MainWindow::openChatHistoryDialog() {
+    // Make sure the *current* chat is on disk before showing the dialog so
+    // the user sees an up-to-date list.
+    saveCurrentChat();
+
+    ChatHistoryDialog dlg(m_currentChatId, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    switch (dlg.resultAction()) {
+    case ChatHistoryDialog::Action::Open:
+        if (!dlg.selectedChatId().isEmpty()
+            && dlg.selectedChatId() != m_currentChatId) {
+            loadChatById(dlg.selectedChatId());
+        }
+        break;
+    case ChatHistoryDialog::Action::NewChat:
+        newChat(/*persistOld=*/true);
+        break;
+    case ChatHistoryDialog::Action::None:
+    default:
+        break;
+    }
+}
+
+// =============================================================================
 //  Slots
 // =============================================================================
 
@@ -1263,11 +1472,12 @@ void MainWindow::onUserInput() {
     const QString text = inputField->text().trimmed();
     if (text.isEmpty()) return;
 
-    addMessage(text, true);
+    appendUserMessage(text);
     inputField->clear();
 
     currentAiBubble = new MessageWidget(QString(), /*isUser=*/false, this);
     chatLayout->insertWidget(chatLayout->count() - 1, currentAiBubble);
+    m_currentAiText.clear();
 
     aiThread->queuePrompt(Config::SYSTEM_PROMPT, text);
     setGenerating(true);
@@ -1279,6 +1489,7 @@ void MainWindow::updateAiStream(const QString& token) {
 
     const bool keepPinned = isNearBottom();
     currentAiBubble->appendText(token);
+    m_currentAiText.append(token);
     if (keepPinned) {
         scrollToBottom();
     }
@@ -1298,6 +1509,11 @@ void MainWindow::onReplyFinished(const QString& fullResponse) {
         handleSystemCommand(cmd, shell == QLatin1String("ps"));
     }
 
+    // Persist the full visible AI response into the current chat record.
+    if (!m_currentAiText.trimmed().isEmpty()) {
+        appendAiMessage(m_currentAiText.trimmed());
+    }
+    m_currentAiText.clear();
     currentAiBubble = nullptr;
 }
 

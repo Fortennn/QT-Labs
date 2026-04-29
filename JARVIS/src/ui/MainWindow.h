@@ -1,8 +1,10 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QDateTime>
 #include <QMainWindow>
 #include <QString>
+#include <QVector>
 
 #include "../ai/LlamaWorkerThread.h"
 
@@ -70,6 +72,15 @@ private:
     bool isNearBottom() const;
     void scrollToBottom();
 
+    // ---- Chat history ----
+    void clearChatLayout();          // remove every MessageWidget from chatLayout
+    void newChat(bool persistOld);   // start a brand new conversation
+    void saveCurrentChat() const;    // serialize m_currentMessages to JSON
+    void loadChatById(const QString& id);
+    void appendUserMessage(const QString& text);
+    void appendAiMessage(const QString& text);
+    void openChatHistoryDialog();
+
     // ---- System command dispatch ----
     void handleSystemCommand(const QString& shellCmd, bool isPowerShell);
 
@@ -107,6 +118,19 @@ private:
     // Last model file path queued for loading. Used by the modelLoaded slot to
     // refresh the "ACTIVE MODEL" sidebar label with the correct file name.
     QString      m_lastModelPath;
+
+    // ---- Chat-history state ----
+    struct StoredMessage {
+        bool      isUser;
+        QString   text;
+        QDateTime time;
+    };
+
+    QString               m_currentChatId;
+    QString               m_currentChatTitle;
+    QVector<StoredMessage> m_currentMessages;
+    QString               m_currentAiText;   // accumulator while the AI streams
+    QPushButton*          btnHistory       = nullptr;
 
     // Effects we animate
     QGraphicsDropShadowEffect* sendShadow  = nullptr;

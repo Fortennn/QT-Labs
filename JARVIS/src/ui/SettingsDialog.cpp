@@ -10,9 +10,14 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGraphicsDropShadowEffect>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPaintEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
@@ -27,11 +32,12 @@
 #include <QWidget>
 
 #include "../ai/SystemPrompt.h"
+#include "WelcomeDialog.h"
 
 namespace {
 
 // =============================================================================
-//  Local helpers (HelpButton + withHelp)
+//  Local helpers
 // =============================================================================
 
 // Round "?" tool button. Click → bubble tooltip with rich HTML description.
@@ -76,19 +82,119 @@ private:
     QString m_text;
 };
 
-// Wrap a control in a row with a "?" button on the right.
-QWidget* withHelp(QWidget* control, const QString& description) {
-    auto* host = new QWidget(control->parentWidget());
-    auto* row  = new QHBoxLayout(host);
-    row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(8);
-    row->addWidget(control, 1);
-    row->addWidget(new HelpButton(description, host), 0, Qt::AlignVCenter);
-    return host;
+// Build a "card" container for a tab section. Every Settings field is wrapped
+// in one of these to give the dialog a structured, premium feel instead of
+// a plain QFormLayout.
+QFrame* makeCard(QWidget* parent) {
+    auto* card = new QFrame(parent);
+    card->setObjectName(QStringLiteral("settingCard"));
+    card->setStyleSheet(QStringLiteral(R"_(
+        QFrame#settingCard {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 rgba(20, 28, 40, 230),
+                stop:1 rgba(11, 16, 25, 230));
+            border: 1px solid rgba(60, 78, 102, 140);
+            border-radius: 14px;
+        }
+    )_"));
+    return card;
 }
 
-// QSettings helpers — scoped under "settings/<key>" so they don't collide
-// with WelcomeDialog's "user/name".
+// A "label-on-top, control-below" row inside a card. Optionally adds a "?"
+// help button to the right of the title. The control is added at the bottom.
+struct FieldOptions {
+    QString  title;
+    QString  subtitle;     // optional grey caption shown below title
+    QString  helpText;     // if non-empty, adds a "?" button on the title row
+    QWidget* control = nullptr;   // main control (QSpinBox, QSlider, etc.)
+    QWidget* trailing = nullptr;  // optional right-aligned widget on the title row
+};
+
+QWidget* buildFieldCard(QWidget* parent, const FieldOptions& opt) {
+    auto* card = makeCard(parent);
+    auto* lay  = new QVBoxLayout(card);
+    lay->setContentsMargins(18, 14, 18, 14);
+    lay->setSpacing(8);
+
+    // --- Title row (label + optional help "?" + optional trailing) ---
+    auto* titleRow = new QHBoxLayout;
+    titleRow->setContentsMargins(0, 0, 0, 0);
+    titleRow->setSpacing(8);
+
+    auto* title = new QLabel(opt.title, card);
+    title->setStyleSheet(QStringLiteral(
+        "color: #e6edf3; font-size: 13.5px; font-weight: 700; "
+        "letter-spacing: 0.3px; background: transparent;"));
+    titleRow->addWidget(title);
+
+    if (!opt.helpText.isEmpty()) {
+        titleRow->addWidget(new HelpButton(opt.helpText, card),
+                            0, Qt::AlignVCenter);
+    }
+    titleRow->addStretch();
+    if (opt.trailing) titleRow->addWidget(opt.trailing, 0, Qt::AlignVCenter);
+
+    lay->addLayout(titleRow);
+
+    // --- Optional subtitle ---
+    if (!opt.subtitle.isEmpty()) {
+        auto* sub = new QLabel(opt.subtitle, card);
+        sub->setWordWrap(true);
+        sub->setStyleSheet(QStringLiteral(
+            "color: #8a99b1; font-size: 11.5px; font-weight: 500; "
+            "letter-spacing: 0.2px; background: transparent;"));
+        lay->addWidget(sub);
+    }
+
+    // --- Control ---
+    if (opt.control) {
+        opt.control->setParent(card);
+        lay->addWidget(opt.control);
+    }
+
+    return card;
+}
+
+// Tiny helper for tabs: a vertical scroll-able area that hosts a column of
+// cards with consistent margins.
+QWidget* makeTabPage(QWidget*& innerCol /*out*/) {
+    auto* page = new QWidget;
+    auto* col  = new QVBoxLayout(page);
+    col->setContentsMargins(4, 14, 14, 14);
+    col->setSpacing(12);
+    innerCol = page;
+    return page;
+}
+
+// Render a circular avatar pixmap into a QLabel of the given side. Falls
+// back to a "+" glyph when no avatar is set yet.
+void paintAvatarLabel(QLabel* label, int side) {
+    label->setFixedSize(side, side);
+    label->setAlignment(Qt::AlignCenter);
+
+    QPixmap pix = WelcomeDialog::savedAvatar(side);
+    if (!pix.isNull()) {
+        // Mask + halo + ring are drawn into the bitmap itself, so the QLabel
+        // does not need a square border (which would visibly leak outside
+        // the round mask).
+        label->setPixmap(WelcomeDialog::roundAvatar(pix, side));
+        label->setText(QString());
+        label->setStyleSheet(QStringLiteral(
+            "background: transparent; border: none;"));
+    } else {
+        label->setPixmap(QPixmap());
+        label->setText(QStringLiteral("+"));
+        label->setStyleSheet(QStringLiteral(
+            "color: #58a6ff; font-size: %1px; font-weight: 300; "
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "  stop:0 rgba(47,129,247,55), stop:1 rgba(31,110,235,30)); "
+            "border: 2px dashed rgba(47, 129, 247, 160); "
+            "border-radius: %2px;")
+                .arg(side / 3).arg(side / 2));
+    }
+}
+
+// QSettings keys.
 constexpr const char* kK_Model         = "settings/modelPath";
 constexpr const char* kK_Temperature   = "settings/temperature";
 constexpr const char* kK_Context       = "settings/contextSize";
@@ -114,25 +220,29 @@ SettingsDialog::SettingsDialog(QWidget* parent)
 {
     setWindowTitle(QStringLiteral("JARVIS · Налаштування"));
     setModal(true);
-    resize(720, 720);
+    resize(760, 760);
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(20, 20, 20, 16);
+    root->setContentsMargins(22, 22, 22, 18);
     root->setSpacing(14);
 
     // ---- Title strip ----
     {
-        auto* title = new QLabel(QStringLiteral("JARVIS · ПАНЕЛЬ КЕРУВАННЯ"), this);
+        auto* eyebrow = new QLabel(QStringLiteral("JARVIS · ПАНЕЛЬ КЕРУВАННЯ"), this);
+        eyebrow->setStyleSheet(QStringLiteral(
+            "color: #58a6ff; font-size: 10px; font-weight: 800; letter-spacing: 4px;"));
+        auto* title = new QLabel(QStringLiteral("Налаштування"), this);
         title->setStyleSheet(QStringLiteral(
-            "color: #ffffff; font-size: 18px; font-weight: 800; letter-spacing: 3px;"));
+            "color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: 0.3px;"));
         auto* subtitle = new QLabel(
-            QStringLiteral("Налаштуй модель, промпт і вигляд інтерфейсу. "
-                           "Біля кожного поля кнопка «?» — натисни, щоб прочитати опис."), this);
+            QStringLiteral("Тонко налаштуй модель, промпт і вигляд інтерфейсу."),
+            this);
         subtitle->setStyleSheet(QStringLiteral(
-            "color: #8a99b1; font-size: 12px; letter-spacing: 0.5px;"));
+            "color: #8a99b1; font-size: 12px; letter-spacing: 0.4px;"));
         subtitle->setWordWrap(true);
         auto* head = new QVBoxLayout;
         head->setSpacing(2);
+        head->addWidget(eyebrow);
         head->addWidget(title);
         head->addWidget(subtitle);
         root->addLayout(head);
@@ -196,55 +306,79 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     });
 
     // ---- Stylesheet ----
+    // QDialog uses a transparent background so paintEvent() can render the
+    // aurora-style scene below the widgets.
+    setAttribute(Qt::WA_StyledBackground, false);
     setStyleSheet(QStringLiteral(R"_(
-        QDialog {
-            background-color: #06090d;
-            color: #e6edf3;
-        }
-        QLabel { color: #d1d7df; font-size: 13px; }
+        QDialog { background: transparent; color: #e6edf3; }
+        QLabel  { color: #d1d7df; font-size: 13px; background: transparent; }
 
         QTabWidget::pane {
-            border: 1px solid #182334;
-            border-radius: 12px;
+            border: 1px solid rgba(35, 50, 72, 220);
+            border-radius: 14px;
             top: -1px;
-            background: #08111c;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 rgba(8, 17, 28, 175),
+                stop:1 rgba(6, 10, 18, 215));
         }
         QTabBar::tab {
             color: #8a99b1;
             background: transparent;
-            padding: 9px 18px;
+            padding: 9px 20px;
             font-size: 12px;
             font-weight: 700;
             letter-spacing: 1.5px;
             border: 1px solid transparent;
             border-bottom: none;
-            border-top-left-radius: 10px;
-            border-top-right-radius: 10px;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
             margin-right: 4px;
         }
         QTabBar::tab:hover { color: #d1d7df; }
         QTabBar::tab:selected {
             color: #ffffff;
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 rgba(47, 129, 247, 80),
-                stop:1 rgba(13, 19, 28, 230));
+                stop:0 rgba(47, 129, 247, 110),
+                stop:1 rgba(8, 17, 28, 240));
             border: 1px solid #233248;
             border-bottom: 1px solid #08111c;
         }
 
         QComboBox, QDoubleSpinBox, QSpinBox, QPlainTextEdit, QLineEdit {
-            background-color: #0f1620;
+            background-color: #0c1320;
             color: #e6edf3;
             border: 1px solid #233248;
             border-radius: 10px;
-            padding: 6px 10px;
+            padding: 8px 12px;
+            font-size: 13px;
             selection-background-color: #2f81f7;
         }
         QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus,
         QPlainTextEdit:focus, QLineEdit:focus {
             border: 1px solid #2f81f7;
         }
-        QComboBox::drop-down { border: none; width: 22px; }
+        QComboBox::drop-down { border: none; width: 24px; }
+        QSpinBox::up-button, QSpinBox::down-button,
+        QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+            background: transparent;
+            border: none;
+            width: 16px;
+        }
+        QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+            image: none;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 5px solid #58a6ff;
+            width: 0; height: 0;
+        }
+        QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+            image: none;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid #58a6ff;
+            width: 0; height: 0;
+        }
+
         QPushButton {
             background-color: qlineargradient(
                 x1:0, y1:0, x2:0, y2:1, stop:0 #182336, stop:1 #0e1626);
@@ -273,18 +407,22 @@ SettingsDialog::SettingsDialog(QWidget* parent)
             background: #ffffff; border: 2px solid #2f81f7;
             width: 14px; margin: -5px 0; border-radius: 9px;
         }
-        QCheckBox { color: #d1d7df; }
+        QCheckBox { color: #d1d7df; font-size: 13px; }
         QCheckBox::indicator {
             width: 16px; height: 16px;
             border-radius: 4px;
             border: 1px solid #2a3a52;
-            background: #0f1620;
+            background: #0c1320;
         }
         QCheckBox::indicator:checked {
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 #58a6ff, stop:1 #2f81f7);
             border: 1px solid #2f81f7;
         }
+        QScrollArea { background: transparent; border: none; }
+        QScrollArea > QWidget > QWidget { background: transparent; }
+        QTabWidget::tab-bar { alignment: left; }
+
         QScrollBar:vertical {
             background: transparent; width: 12px; margin: 4px;
         }
@@ -312,33 +450,35 @@ SettingsDialog::SettingsDialog(QWidget* parent)
 // =============================================================================
 
 void SettingsDialog::buildModelTab(QWidget* tab) {
-    auto* form = new QFormLayout(tab);
-    form->setContentsMargins(8, 12, 18, 12);
-    form->setHorizontalSpacing(14);
-    form->setVerticalSpacing(12);
+    auto* col = new QVBoxLayout(tab);
+    col->setContentsMargins(4, 14, 14, 14);
+    col->setSpacing(12);
 
-    // Model file + Browse
+    // --- Model file card ---
     {
-        auto* host = new QWidget(tab);
-        auto* row  = new QHBoxLayout(host);
-        row->setContentsMargins(0, 0, 0, 0);
-        row->setSpacing(8);
+        auto* row = new QWidget(tab);
+        auto* lay = new QHBoxLayout(row);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(8);
 
-        m_modelCombo = new QComboBox(tab);
+        m_modelCombo = new QComboBox(row);
         m_modelCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-        auto* browse = new QPushButton(QStringLiteral("Огляд…"), tab);
+        auto* browse = new QPushButton(QStringLiteral("Огляд…"), row);
         browse->setCursor(Qt::PointingHandCursor);
 
-        row->addWidget(m_modelCombo, 1);
-        row->addWidget(browse);
+        lay->addWidget(m_modelCombo, 1);
+        lay->addWidget(browse);
 
-        form->addRow(QStringLiteral("Файл моделі"), withHelp(host, QStringLiteral(
-            "Файл <b>GGUF</b>, який JARVIS завантажить у пам'ять. У списку — "
-            "усі <code>*.gguf</code> у теці <code>./models</code> поряд із "
-            "виконуваним файлом. Натисни <i>Огляд…</i>, щоб обрати файл "
-            "із будь-якої теки. Зміна моделі викликає повне перезавантаження — "
-            "це триває кілька секунд.")));
+        col->addWidget(buildFieldCard(tab, FieldOptions{
+            QStringLiteral("Файл моделі"),
+            QStringLiteral("GGUF-файл, який JARVIS завантажує в пам'ять. "
+                           "У списку — усе з теки ./models поряд із виконуваним "
+                           "файлом."),
+            QString(),  // no help button
+            row,
+            nullptr
+        }));
 
         connect(browse, &QPushButton::clicked, this, [this]() {
             const QString file = QFileDialog::getOpenFileName(
@@ -355,129 +495,228 @@ void SettingsDialog::buildModelTab(QWidget* tab) {
         });
     }
 
+    // --- Context size card ---
     m_contextSpin = new QSpinBox(tab);
     m_contextSpin->setRange(512, 32768);
     m_contextSpin->setSingleStep(256);
     m_contextSpin->setValue(2048);
-    form->addRow(QStringLiteral("Розмір контексту"), withHelp(m_contextSpin, QStringLiteral(
-        "Скільки токенів модель тримає в робочій пам'яті одночасно "
-        "(промпт + історія + відповідь). Більший контекст = більше "
-        "пам'ятає, але потребує більше RAM і генерує повільніше. "
-        "Більшість чат-моделей добре працюють на <b>2048–4096</b>. "
-        "Зміна цього значення тягне за собою перезавантаження моделі.")));
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Розмір контексту"),
+        QStringLiteral("Скільки токенів модель тримає в робочій пам'яті: "
+                       "промпт + історія + відповідь. Більше = краща пам'ять, "
+                       "повільніше і потребує більше RAM."),
+        QString(),
+        m_contextSpin,
+        nullptr
+    }));
 
-    form->addRow(new QWidget); // bottom spacer
+    col->addStretch();
 }
 
 void SettingsDialog::buildSamplingTab(QWidget* tab) {
-    auto* form = new QFormLayout(tab);
-    form->setContentsMargins(8, 12, 18, 12);
-    form->setHorizontalSpacing(14);
-    form->setVerticalSpacing(12);
+    auto* col = new QVBoxLayout(tab);
+    col->setContentsMargins(4, 14, 14, 14);
+    col->setSpacing(12);
 
     m_temperatureSpin = new QDoubleSpinBox(tab);
     m_temperatureSpin->setRange(0.0, 2.0);
     m_temperatureSpin->setSingleStep(0.05);
     m_temperatureSpin->setDecimals(2);
     m_temperatureSpin->setValue(0.80);
-    form->addRow(QStringLiteral("Temperature"), withHelp(m_temperatureSpin, QStringLiteral(
-        "Наскільки <i>випадковими</i> є відповіді. <b>0.0</b> — "
-        "детермінований, обирає найбільш імовірний токен (повторюваний). "
-        "<b>0.7–0.9</b> — стандарт для чату, баланс між точністю й творчістю. "
-        "<b>1.2+</b> — креативно, але часто «маячня». Низькі значення для "
-        "коду й фактів, вищі — для прози й мозкового штурму.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Temperature"), QString(),
+        QStringLiteral(
+            "Наскільки <i>випадковими</i> є відповіді. <b>0.0</b> — "
+            "детермінований, обирає найбільш імовірний токен (повторюваний). "
+            "<b>0.7–0.9</b> — стандарт для чату, баланс між точністю й творчістю. "
+            "<b>1.2+</b> — креативно, але часто «маячня». Низькі значення для "
+            "коду й фактів, вищі — для прози й мозкового штурму."),
+        m_temperatureSpin, nullptr
+    }));
 
     m_topPSpin = new QDoubleSpinBox(tab);
     m_topPSpin->setRange(0.05, 1.0);
     m_topPSpin->setSingleStep(0.05);
     m_topPSpin->setDecimals(2);
     m_topPSpin->setValue(0.95);
-    form->addRow(QStringLiteral("Top-P (nucleus)"), withHelp(m_topPSpin, QStringLiteral(
-        "Залишає лише найменшу множину токенів, чия сумарна ймовірність "
-        "не менша за <b>P</b>. <b>1.0</b> — розглядати всі токени. "
-        "<b>0.9–0.95</b> — класичний nucleus-sampling, гарний дефолт. "
-        "Менші значення дають безпечніші, точніші відповіді; вищі — "
-        "пропускають рідкісні слова.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Top-P (nucleus)"), QString(),
+        QStringLiteral(
+            "Залишає лише найменшу множину токенів, чия сумарна ймовірність "
+            "не менша за <b>P</b>. <b>1.0</b> — розглядати всі токени. "
+            "<b>0.9–0.95</b> — класичний nucleus-sampling, гарний дефолт. "
+            "Менші значення дають безпечніші, точніші відповіді; вищі — "
+            "пропускають рідкісні слова."),
+        m_topPSpin, nullptr
+    }));
 
     m_topKSpin = new QSpinBox(tab);
     m_topKSpin->setRange(1, 500);
     m_topKSpin->setValue(40);
-    form->addRow(QStringLiteral("Top-K"), withHelp(m_topKSpin, QStringLiteral(
-        "Брати лише <b>K</b> найімовірніших наступних токенів. <b>40</b> — "
-        "консервативний дефолт. Менше (наприклад, 10) робить модель "
-        "передбачуванішою; більше (100+) дає ширший словник. Працює разом "
-        "із Top-P — спрацьовує те, що жорсткіше.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Top-K"), QString(),
+        QStringLiteral(
+            "Брати лише <b>K</b> найімовірніших наступних токенів. <b>40</b> — "
+            "консервативний дефолт. Менше (наприклад, 10) робить модель "
+            "передбачуванішою; більше (100+) дає ширший словник. Працює разом "
+            "із Top-P — спрацьовує те, що жорсткіше."),
+        m_topKSpin, nullptr
+    }));
 
     m_minPSpin = new QDoubleSpinBox(tab);
     m_minPSpin->setRange(0.0, 0.5);
     m_minPSpin->setSingleStep(0.01);
     m_minPSpin->setDecimals(2);
     m_minPSpin->setValue(0.10);
-    form->addRow(QStringLiteral("Min-P"), withHelp(m_minPSpin, QStringLiteral(
-        "Відкидає токен, якщо його ймовірність нижча за "
-        "<b>min_p × max(p)</b>. Сучасна альтернатива Top-P, яка адаптується "
-        "до впевненості моделі. <b>0.05–0.10</b> добре працює для більшості "
-        "чат-сценаріїв. <b>0</b> — вимкнути.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Min-P"), QString(),
+        QStringLiteral(
+            "Відкидає токен, якщо його ймовірність нижча за "
+            "<b>min_p × max(p)</b>. Сучасна альтернатива Top-P, яка адаптується "
+            "до впевненості моделі. <b>0.05–0.10</b> добре працює для більшості "
+            "чат-сценаріїв. <b>0</b> — вимкнути."),
+        m_minPSpin, nullptr
+    }));
 
     m_repeatPenaltySpin = new QDoubleSpinBox(tab);
     m_repeatPenaltySpin->setRange(1.0, 2.0);
     m_repeatPenaltySpin->setSingleStep(0.05);
     m_repeatPenaltySpin->setDecimals(2);
     m_repeatPenaltySpin->setValue(1.10);
-    form->addRow(QStringLiteral("Штраф за повтор"), withHelp(m_repeatPenaltySpin, QStringLiteral(
-        "Множник для токенів, які вже з'явилися нещодавно. <b>1.0</b> — "
-        "вимкнено. <b>1.05–1.20</b> зменшує повторення без шкоди для "
-        "граматики. Завищене значення (>1.3) псує зв'язність — модель "
-        "починає уникати поширених слів.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Штраф за повтор"), QString(),
+        QStringLiteral(
+            "Множник для токенів, які вже з'явилися нещодавно. <b>1.0</b> — "
+            "вимкнено. <b>1.05–1.20</b> зменшує повторення без шкоди для "
+            "граматики. Завищене значення (>1.3) псує зв'язність — модель "
+            "починає уникати поширених слів."),
+        m_repeatPenaltySpin, nullptr
+    }));
 
     m_maxTokensSpin = new QSpinBox(tab);
     m_maxTokensSpin->setRange(32, 8192);
     m_maxTokensSpin->setSingleStep(32);
     m_maxTokensSpin->setValue(1024);
-    form->addRow(QStringLiteral("Макс. довжина відповіді"),
-        withHelp(m_maxTokensSpin, QStringLiteral(
-        "Жорсткий ліміт токенів на одну відповідь. Генерація також "
-        "зупиняється, коли модель емітить токен кінця ходу. Зменши, якщо "
-        "відповіді задовгі; збільш для розгорнутих текстів.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Макс. довжина відповіді"), QString(),
+        QStringLiteral(
+            "Жорсткий ліміт токенів на одну відповідь. Генерація також "
+            "зупиняється, коли модель емітить токен кінця ходу. Зменши, якщо "
+            "відповіді задовгі; збільш для розгорнутих текстів."),
+        m_maxTokensSpin, nullptr
+    }));
 
-    form->addRow(new QWidget);
+    col->addStretch();
 }
 
 void SettingsDialog::buildPersonaTab(QWidget* tab) {
-    auto* form = new QFormLayout(tab);
-    form->setContentsMargins(8, 12, 18, 12);
-    form->setHorizontalSpacing(14);
-    form->setVerticalSpacing(12);
+    auto* col = new QVBoxLayout(tab);
+    col->setContentsMargins(4, 14, 14, 14);
+    col->setSpacing(12);
 
-    m_userNameEdit = new QLineEdit(tab);
-    m_userNameEdit->setPlaceholderText(QStringLiteral("Наприклад: Олександр"));
-    m_userNameEdit->setMaxLength(40);
-    form->addRow(QStringLiteral("Твоє ім'я"), withHelp(m_userNameEdit, QStringLiteral(
-        "Як JARVIS звертатиметься до тебе. Це ім'я також виводиться "
-        "в нижньому лівому куті панелі та над кожним твоїм повідомленням. "
-        "Залиш порожнім, щоб повернути дефолтне «YOU».")));
+    // --- Profile card: avatar + name in one card ---
+    {
+        auto* card = makeCard(tab);
+        auto* lay = new QVBoxLayout(card);
+        lay->setContentsMargins(18, 16, 18, 16);
+        lay->setSpacing(14);
 
+        auto* sectionTitle = new QLabel(QStringLiteral("Профіль"), card);
+        sectionTitle->setStyleSheet(QStringLiteral(
+            "color: #e6edf3; font-size: 13.5px; font-weight: 700;"));
+
+        auto* sectionSub = new QLabel(
+            QStringLiteral("Фото та ім'я використовуються в нижній панелі "
+                           "та поряд із твоїми повідомленнями."), card);
+        sectionSub->setStyleSheet(QStringLiteral(
+            "color: #8a99b1; font-size: 11.5px;"));
+        sectionSub->setWordWrap(true);
+
+        // --- Avatar row: preview + buttons ---
+        auto* avatarRow = new QHBoxLayout;
+        avatarRow->setContentsMargins(0, 4, 0, 0);
+        avatarRow->setSpacing(16);
+
+        auto* avatarLabel = new QLabel(card);
+        paintAvatarLabel(avatarLabel, 88);
+
+        auto* avatarBtnsCol = new QVBoxLayout;
+        avatarBtnsCol->setSpacing(8);
+
+        auto* uploadBtn = new QPushButton(
+            QStringLiteral("Завантажити фото…"), card);
+        uploadBtn->setCursor(Qt::PointingHandCursor);
+        auto* removeBtn = new QPushButton(
+            QStringLiteral("Видалити фото"), card);
+        removeBtn->setCursor(Qt::PointingHandCursor);
+
+        avatarBtnsCol->addWidget(uploadBtn);
+        avatarBtnsCol->addWidget(removeBtn);
+        avatarBtnsCol->addStretch();
+
+        avatarRow->addWidget(avatarLabel, 0, Qt::AlignTop);
+        avatarRow->addLayout(avatarBtnsCol, 1);
+
+        connect(uploadBtn, &QPushButton::clicked, this, [this, avatarLabel]() {
+            const QString src = QFileDialog::getOpenFileName(
+                this, QStringLiteral("Обрати фото"),
+                QString(),
+                QStringLiteral("Зображення (*.png *.jpg *.jpeg *.bmp *.webp)"));
+            if (src.isEmpty()) return;
+            if (WelcomeDialog::persistAvatarFromFile(src)) {
+                paintAvatarLabel(avatarLabel, avatarLabel->width());
+            }
+        });
+        connect(removeBtn, &QPushButton::clicked, this, [avatarLabel]() {
+            WelcomeDialog::clearAvatar();
+            paintAvatarLabel(avatarLabel, avatarLabel->width());
+        });
+
+        // --- Name field ---
+        auto* nameTitle = new QLabel(QStringLiteral("Твоє ім'я"), card);
+        nameTitle->setStyleSheet(QStringLiteral(
+            "color: #e6edf3; font-size: 13px; font-weight: 700;"));
+
+        m_userNameEdit = new QLineEdit(card);
+        m_userNameEdit->setPlaceholderText(QStringLiteral("Наприклад: Олександр"));
+        m_userNameEdit->setMaxLength(40);
+
+        lay->addWidget(sectionTitle);
+        lay->addWidget(sectionSub);
+        lay->addLayout(avatarRow);
+        lay->addSpacing(4);
+        lay->addWidget(nameTitle);
+        lay->addWidget(m_userNameEdit);
+
+        col->addWidget(card);
+    }
+
+    // --- System prompt card ---
     m_systemPromptEdit = new QPlainTextEdit(tab);
     m_systemPromptEdit->setPlaceholderText(
         QStringLiteral("Залиш порожнім, щоб використати вбудований промпт JARVIS."));
     m_systemPromptEdit->setMinimumHeight(220);
     m_systemPromptEdit->setPlainText(Config::SYSTEM_PROMPT);
-    form->addRow(QStringLiteral("Системний промпт"),
-        withHelp(m_systemPromptEdit, QStringLiteral(
-        "Приховані інструкції, які модель читає <i>перед</i> кожною "
-        "розмовою. Визначають персону, тон, доступні інструменти "
-        "(теги <code>[CMD: …]</code>) і правила. Порожньо — буде "
-        "використано вбудований промпт. <b>Редагуй обережно</b> — "
-        "поганий промпт = погана модель.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Системний промпт"),
+        QStringLiteral("Приховані інструкції, які модель читає перед "
+                       "кожною розмовою."),
+        QStringLiteral(
+            "Приховані інструкції, які модель читає <i>перед</i> кожною "
+            "розмовою. Визначають персону, тон, доступні інструменти "
+            "(теги <code>[CMD: …]</code>) і правила. Порожньо — буде "
+            "використано вбудований промпт. <b>Редагуй обережно</b> — "
+            "поганий промпт = погана модель."),
+        m_systemPromptEdit, nullptr
+    }));
 
-    form->addRow(new QWidget);
+    col->addStretch();
 }
 
 void SettingsDialog::buildInterfaceTab(QWidget* tab) {
-    auto* form = new QFormLayout(tab);
-    form->setContentsMargins(8, 12, 18, 12);
-    form->setHorizontalSpacing(14);
-    form->setVerticalSpacing(12);
+    auto* col = new QVBoxLayout(tab);
+    col->setContentsMargins(4, 14, 14, 14);
+    col->setSpacing(12);
 
     m_accentCombo = new QComboBox(tab);
     m_accentCombo->addItem(QStringLiteral("Aurora Blue (за замовчуванням)"), QColor( 47, 129, 247));
@@ -486,30 +725,37 @@ void SettingsDialog::buildInterfaceTab(QWidget* tab) {
     m_accentCombo->addItem(QStringLiteral("Emerald Core"),                  QColor( 52, 211, 153));
     m_accentCombo->addItem(QStringLiteral("Amber Warning"),                 QColor(245, 158,  11));
     m_accentCombo->addItem(QStringLiteral("Crimson"),                       QColor(244,  63,  94));
-    form->addRow(QStringLiteral("Акцентний колір"), withHelp(m_accentCombo, QStringLiteral(
-        "Перефарбовує анімовані плями фону, рамку поля вводу, градієнт "
-        "кнопки відправки й підсвітки бічної панелі. Змінює лише сімейство "
-        "відтінку — типографіка, бабли й obsidian-палітра лишаються тими ж.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Акцентний колір"),
+        QStringLiteral("Перефарбовує фон, рамку поля вводу та кнопку "
+                       "відправки."),
+        QString(),
+        m_accentCombo, nullptr
+    }));
 
     m_opacitySlider = new QSlider(Qt::Horizontal, tab);
     m_opacitySlider->setRange(70, 100);
     m_opacitySlider->setValue(100);
     m_opacitySlider->setTickPosition(QSlider::TicksBelow);
     m_opacitySlider->setTickInterval(5);
-    form->addRow(QStringLiteral("Прозорість вікна"), withHelp(m_opacitySlider, QStringLiteral(
-        "Прозорість усього вікна JARVIS. <b>100 %</b> — повністю непрозоре. "
-        "Менші значення дозволяють шпалерам / IDE проглядатись крізь — "
-        "виглядає круто на тлі темного робочого столу. Нижче 70 % "
-        "читабельність уже страждає.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Прозорість вікна"),
+        QStringLiteral("100 % — повністю непрозоре. Менші значення дозволяють "
+                       "робочому столу проглядатись крізь вікно."),
+        QString(),
+        m_opacitySlider, nullptr
+    }));
 
     m_timestampsCheck = new QCheckBox(QStringLiteral("Показувати час біля повідомлень"), tab);
     m_timestampsCheck->setChecked(true);
-    form->addRow(QString(), withHelp(m_timestampsCheck, QStringLiteral(
-        "Перемикає маленький час <code>HH:mm</code> над кожним "
-        "повідомленням. Вимкнено — чистіший, кінематографічний вигляд; "
-        "увімкнено — корисно для довгих сесій.")));
+    col->addWidget(buildFieldCard(tab, {
+        QStringLiteral("Часові мітки"),
+        QStringLiteral("Маленький час HH:mm над кожним повідомленням."),
+        QString(),
+        m_timestampsCheck, nullptr
+    }));
 
-    form->addRow(new QWidget);
+    col->addStretch();
 }
 
 // =============================================================================
@@ -665,4 +911,62 @@ void SettingsDialog::selectBestDefaultModel() {
         }
     }
     m_modelCombo->setCurrentIndex(0);
+}
+
+// =============================================================================
+//  paintEvent — premium dark aurora background
+// =============================================================================
+
+void SettingsDialog::paintEvent(QPaintEvent* /*e*/) {
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const QRectF r = rect();
+
+    // 1) Base obsidian gradient.
+    {
+        QLinearGradient base(QPointF(0, 0), QPointF(0, r.height()));
+        base.setColorAt(0.0, QColor(0x0d, 0x14, 0x1d));
+        base.setColorAt(1.0, QColor(0x05, 0x08, 0x0e));
+        p.fillRect(r, base);
+    }
+
+    // 2) Top-left accent blob (cool blue glow).
+    {
+        QRadialGradient blob(QPointF(r.width() * 0.18, r.height() * 0.10),
+                             r.width() * 0.55);
+        blob.setColorAt(0.00, QColor(47, 129, 247, 70));
+        blob.setColorAt(0.55, QColor(47, 129, 247, 18));
+        blob.setColorAt(1.00, QColor(47, 129, 247,  0));
+        p.fillRect(r, blob);
+    }
+
+    // 3) Bottom-right cyan whisper.
+    {
+        QRadialGradient blob(QPointF(r.width() * 0.85, r.height() * 0.92),
+                             r.width() * 0.65);
+        blob.setColorAt(0.00, QColor(56, 189, 248, 50));
+        blob.setColorAt(0.55, QColor(56, 189, 248, 14));
+        blob.setColorAt(1.00, QColor(56, 189, 248,  0));
+        p.fillRect(r, blob);
+    }
+
+    // 4) Subtle vignette so card edges feel rooted.
+    {
+        QRadialGradient vignette(QPointF(r.width() * 0.5, r.height() * 0.5),
+                                 r.width() * 0.85);
+        vignette.setColorAt(0.55, QColor(0, 0, 0,   0));
+        vignette.setColorAt(1.00, QColor(0, 0, 0, 130));
+        p.fillRect(r, vignette);
+    }
+
+    // Hairline top accent — replaces the harsh blue stripe with a soft glow.
+    {
+        QLinearGradient stroke(QPointF(0, 0), QPointF(r.width(), 0));
+        stroke.setColorAt(0.0, QColor(47, 129, 247,   0));
+        stroke.setColorAt(0.5, QColor(47, 129, 247, 110));
+        stroke.setColorAt(1.0, QColor(47, 129, 247,   0));
+        p.fillRect(QRectF(0, 0, r.width(), 1), stroke);
+    }
 }

@@ -44,6 +44,11 @@ public:
     // keeps its declared default. Called from the constructor.
     void load();
 
+protected:
+    // Paints the aurora background (radial gradient + accent blob + vignette)
+    // matching the main window's atmosphere.
+    void paintEvent(QPaintEvent* e) override;
+
 private:
     void populateModelList();
     void selectBestDefaultModel();
