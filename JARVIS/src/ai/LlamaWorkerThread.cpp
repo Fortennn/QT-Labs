@@ -20,28 +20,45 @@ LlamaWorkerThread::~LlamaWorkerThread() {
     
     wait();
 
-    if (m_ctx) llama_free(m_ctx);
-    if (m_model) llama_model_free(m_model);
+    releaseModel();
     llama_backend_free();
+}
+
+void LlamaWorkerThread::releaseModel() {
+    if (m_ctx) {
+        llama_free(m_ctx);
+        m_ctx = nullptr;
+    }
+    if (m_model) {
+        llama_model_free(m_model);
+        m_model = nullptr;
+    }
+}
+
+void LlamaWorkerThread::setParams(float temperature, int contextSize) {
+    QMutexLocker locker(&m_mutex);
+    m_temperature = temperature;
+    if (contextSize >= 512) m_contextSize = contextSize;
 }
 
 bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     qDebug() << "[JARVIS CORE] ----------------------------------------";
     qDebug() << "[JARVIS CORE] ПОЧИНАЄМО СПРОБУ ЗАВАНТАЖЕННЯ МОДЕЛІ";
     qDebug() << "[JARVIS CORE] Шлях до файлу:" << modelPath;
-    
+
     QFile modelFile(modelPath);
     if (!modelFile.exists()) {
         qDebug() << "[JARVIS ERROR] Файл фізично НЕ ІСНУЄ за цим шляхом!";
         emit errorOccurred("Файл моделі не знайдено за шляхом: " + modelPath);
+        emit modelLoaded(false);
         return false;
     }
     qDebug() << "[JARVIS CORE] Файл існує. Розмір:" << modelFile.size() / (1024 * 1024) << "MB";
 
-    if (m_model) {
-        qDebug() << "[JARVIS ERROR] Модель вже завантажена!";
-        emit errorOccurred("Модель вже завантажена.");
-        return false;
+    // Allow swapping models from SettingsDialog: free the previous one first.
+    if (m_model || m_ctx) {
+        qDebug() << "[JARVIS CORE] Звільняю попередню модель/контекст перед перезавантаженням.";
+        releaseModel();
     }
 
     auto mparams = llama_model_default_params();
@@ -53,14 +70,21 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     if (!m_model) {
         qDebug() << "[JARVIS ERROR] llama_model_load_from_file повернув NULL!";
         emit errorOccurred("Помилка llama.cpp під час парсингу файлу.");
+        emit modelLoaded(false);
         return false;
     }
-    
+
     qDebug() << "[JARVIS CORE] Модель успішно прочитана. Створюємо контекст...";
 
+    int ctxSize;
+    {
+        QMutexLocker locker(&m_mutex);
+        ctxSize = m_contextSize;
+    }
+
     auto cparams = llama_context_default_params();
-    cparams.n_ctx = 2048;
-    cparams.n_batch = 2048; // Повинно бути >= максимальній довжині промпту
+    cparams.n_ctx   = ctxSize;
+    cparams.n_batch = ctxSize; // Повинно бути >= максимальній довжині промпту
     // Використовуємо всі доступні ядра CPU
     int cpuThreads = QThread::idealThreadCount();
     qDebug() << "[JARVIS CORE] Використовую потоків:" << cpuThreads;
@@ -72,6 +96,8 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     if (!m_ctx) {
         qDebug() << "[JARVIS ERROR] llama_init_from_model повернув NULL! Замало ОЗУ?";
         emit errorOccurred("Помилка створення контексту. Можливо не вистачає ОЗУ.");
+        releaseModel();
+        emit modelLoaded(false);
         return false;
     }
 
@@ -175,7 +201,12 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
     qDebug() << "[GEN] KV \u043a\u0435\u0448 \u043e\u0447\u0438\u0449\u0435\u043d\u043e.";
 
     QString fullResponse = "";
-    
+
+    // --- Streaming token filter state ---
+    // Hide everything between '[' and ']' from the UI (e.g. [CMD: ...]),
+    // but still accumulate it into fullResponse for downstream parsing.
+    bool inBracket = false;
+
     llama_batch batch = llama_batch_get_one(tokens_list.data(), n_tokens);
     qDebug() << "[GEN] batch \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043e, \u0432\u0438\u043a\u043b\u0438\u043a\u0430\u0454\u043c\u043e llama_decode...";
     
@@ -188,9 +219,15 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
     int n_cur = n_tokens;
     int n_max = 1024;
 
+    float temperature;
+    {
+        QMutexLocker locker(&m_mutex);
+        temperature = m_temperature;
+    }
+
     // Покращене налаштування семплерів для стабільності та уникнення "галюцинацій"
     llama_sampler * sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.8f));         // Трохи більше 'творчості'
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(temperature));
     llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.1f, 1));    // Суворіше відсікаємо сміття та змішування мов
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
@@ -217,7 +254,28 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
         
         QString piece = QString::fromUtf8(buf, len);
         fullResponse += piece;
-        emit tokenGenerated(piece);
+
+        // Strip any bracketed regions character-by-character so the
+        // user only sees clean natural language.
+        QString visible;
+        visible.reserve(piece.size());
+        for (const QChar c : piece) {
+            if (!inBracket) {
+                if (c == QLatin1Char('[')) {
+                    inBracket = true;
+                } else {
+                    visible.append(c);
+                }
+            } else {
+                if (c == QLatin1Char(']')) {
+                    inBracket = false;
+                }
+                // else: silently swallow command-tag content.
+            }
+        }
+        if (!visible.isEmpty()) {
+            emit tokenGenerated(visible);
+        }
 
         batch = llama_batch_get_one(&new_token_id, 1);
         if (llama_decode(m_ctx, batch)) {
