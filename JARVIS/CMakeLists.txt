@@ -23,9 +23,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llama_cpp_headers)
 
-file(GLOB_RECURSE SRC_FILES "src/*.cpp")
-file(GLOB_RECURSE HDR_FILES "src/*.h")
-file(GLOB_RECURSE UI_FILES "src/*.ui")
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "src/*.cpp")
+file(GLOB_RECURSE HDR_FILES CONFIGURE_DEPENDS "src/*.h")
+file(GLOB_RECURSE UI_FILES CONFIGURE_DEPENDS "src/*.ui")
 
 add_executable(JARVIS
     ${SRC_FILES}

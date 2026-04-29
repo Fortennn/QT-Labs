@@ -1,5 +1,7 @@
 #include "MessageWidget.h"
 
+#include <QGraphicsDropShadowEffect>
+
 MessageWidget::MessageWidget(const QString& text, bool isUser, QWidget *parent) 
     : QWidget(parent), m_isUser(isUser) {
     
@@ -8,11 +10,17 @@ MessageWidget::MessageWidget(const QString& text, bool isUser, QWidget *parent)
     label->setWordWrap(true);
     label->setTextInteractionFlags(Qt::TextSelectableByMouse);
     
-    QString style = isUser ? 
-        "background-color: #1f6feb; color: white; border-radius: 15px; padding: 12px; font-size: 14px;" :
-        "background-color: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 15px; padding: 12px; font-size: 14px;";
+    QString style = isUser ?
+        "background-color: #2f81f7; color: #f8fafc; border-radius: 14px; padding: 12px 13px; font-size: 14px;" :
+        "background-color: rgba(15, 22, 31, 220); color: #dfe6ef; border: 1px solid #273344; border-radius: 14px; padding: 12px 13px; font-size: 14px;";
     
     label->setStyleSheet(style);
+
+    auto* shadow = new QGraphicsDropShadowEffect(label);
+    shadow->setBlurRadius(18.0);
+    shadow->setOffset(0, 4);
+    shadow->setColor(QColor(0, 0, 0, 120));
+    label->setGraphicsEffect(shadow);
     
     layout->addWidget(label);
     layout->setContentsMargins(isUser ? 50 : 10, 5, isUser ? 10 : 50, 5);

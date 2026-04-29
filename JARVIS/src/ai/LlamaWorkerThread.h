@@ -19,6 +19,7 @@ public:
     ~LlamaWorkerThread() override;
 
     bool loadModel(const QString& modelPath);
+    void setParams(float temperature, int contextSize);
     void queueLoadModel(const QString& modelPath);
     void queuePrompt(const QString& systemPrompt, const QString& userPrompt);
     void stopGeneration();
@@ -52,6 +53,9 @@ private:
     };
     QQueue<Request> m_requests;
     QString m_modelPathToLoad;
+
+    float m_temperature = 0.8f;
+    int m_contextSize = 2048;
 
     bool m_stopRequested = false;
     bool m_quitThread = false;

@@ -38,10 +38,14 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     }
     qDebug() << "[JARVIS CORE] Файл існує. Розмір:" << modelFile.size() / (1024 * 1024) << "MB";
 
+    if (m_ctx) {
+        llama_free(m_ctx);
+        m_ctx = nullptr;
+    }
+
     if (m_model) {
-        qDebug() << "[JARVIS ERROR] Модель вже завантажена!";
-        emit errorOccurred("Модель вже завантажена.");
-        return false;
+        llama_model_free(m_model);
+        m_model = nullptr;
     }
 
     auto mparams = llama_model_default_params();
@@ -58,9 +62,15 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     
     qDebug() << "[JARVIS CORE] Модель успішно прочитана. Створюємо контекст...";
 
+    int contextSize;
+    {
+        QMutexLocker locker(&m_mutex);
+        contextSize = m_contextSize;
+    }
+
     auto cparams = llama_context_default_params();
-    cparams.n_ctx = 2048;
-    cparams.n_batch = 2048; // Повинно бути >= максимальній довжині промпту
+    cparams.n_ctx = static_cast<uint32_t>(contextSize);
+    cparams.n_batch = static_cast<uint32_t>(contextSize); // Повинно бути >= максимальній довжині промпту
     // Використовуємо всі доступні ядра CPU
     int cpuThreads = QThread::idealThreadCount();
     qDebug() << "[JARVIS CORE] Використовую потоків:" << cpuThreads;
@@ -78,6 +88,12 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     qDebug() << "[JARVIS CORE] Контекст виділено успішно. Готово до роботи!";
     emit modelLoaded(true);
     return true;
+}
+
+void LlamaWorkerThread::setParams(float temperature, int contextSize) {
+    QMutexLocker locker(&m_mutex);
+    m_temperature = temperature;
+    m_contextSize = contextSize;
 }
 
 void LlamaWorkerThread::queueLoadModel(const QString& modelPath) {
@@ -137,101 +153,116 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
         return;
     }
 
-    // Форматуємо промпт за стандартом ChatML з урахуванням історії
     QString promptStr = QString("<|im_start|>system\n%1<|im_end|>\n").arg(req.systemPrompt);
-    
-    // Додаємо минулі повідомлення (обмежуємо останніми 10 для стабільності)
+
     int historyStart = qMax(0, m_history.size() - 10);
     for (int i = historyStart; i < m_history.size(); ++i) {
         promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(m_history[i].user);
         promptStr += QString("<|im_start|>assistant\n%1<|im_end|>\n").arg(m_history[i].assistant);
     }
-    
-    // Додаємо поточне повідомлення
+
     promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(req.userPrompt);
     promptStr += "<|im_start|>assistant\n";
 
-    std::string prompt = promptStr.toStdString();
-    qDebug() << "[GEN] \u0421\u0422\u0410\u0420\u0422. \u0414\u043e\u0432\u0436\u0438\u043d\u0430 \u043f\u0440\u043e\u043c\u043f\u0442\u0443:" << prompt.length() << "\u0441\u0438\u043c\u0432\u043e\u043b\u0456\u0432";
-
-    // b4827+: \u0442\u043e\u043a\u0435\u043d\u0456\u0437\u0430\u0446\u0456\u044f \u0447\u0435\u0440\u0435\u0437 llama_vocab
-    const llama_vocab * vocab = llama_model_get_vocab(m_model);
+    const std::string prompt = promptStr.toStdString();
+    const llama_vocab* vocab = llama_model_get_vocab(m_model);
     if (!vocab) {
-        emit errorOccurred("\u041f\u043e\u043c\u0438\u043b\u043a\u0430: llama_model_get_vocab \u043f\u043e\u0432\u0435\u0440\u043d\u0443\u0432 NULL!");
+        emit errorOccurred("Помилка: llama_model_get_vocab повернув NULL!");
         return;
     }
-    qDebug() << "[GEN] Vocab \u043e\u0442\u0440\u0438\u043c\u0430\u043d\u043e.";
 
-    std::vector<llama_token> tokens_list(prompt.length() + 8);
-    int n_tokens = llama_tokenize(vocab, prompt.c_str(), prompt.length(), tokens_list.data(), tokens_list.size(), true, true);
-    if (n_tokens < 0) {
-        tokens_list.resize(-n_tokens);
-        n_tokens = llama_tokenize(vocab, prompt.c_str(), prompt.length(), tokens_list.data(), tokens_list.size(), true, true);
+    std::vector<llama_token> tokens(prompt.length() + 8);
+    int nPromptTokens = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
+    if (nPromptTokens < 0) {
+        tokens.resize(static_cast<size_t>(-nPromptTokens));
+        nPromptTokens = llama_tokenize(vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
     }
-    tokens_list.resize(n_tokens);
-    qDebug() << "[GEN] \u0422\u043e\u043a\u0435\u043d\u0456\u0437\u0430\u0446\u0456\u044f: " << n_tokens << "\u0442\u043e\u043a\u0435\u043d\u0456\u0432";
 
+    if (nPromptTokens <= 0) {
+        emit errorOccurred("Помилка токенізації промпту.");
+        return;
+    }
+
+    tokens.resize(static_cast<size_t>(nPromptTokens));
     llama_kv_cache_clear(m_ctx);
-    qDebug() << "[GEN] KV \u043a\u0435\u0448 \u043e\u0447\u0438\u0449\u0435\u043d\u043e.";
 
-    QString fullResponse = "";
-    
-    llama_batch batch = llama_batch_get_one(tokens_list.data(), n_tokens);
-    qDebug() << "[GEN] batch \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043e, \u0432\u0438\u043a\u043b\u0438\u043a\u0430\u0454\u043c\u043e llama_decode...";
-    
-    if (llama_decode(m_ctx, batch)) {
-        emit errorOccurred("Llama.cpp Error: \u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0434\u0435\u043a\u043e\u0434\u0443\u0432\u0430\u0442\u0438 \u0441\u0442\u0430\u0440\u0442\u043e\u0432\u0438\u0439 \u043f\u0440\u043e\u043c\u043f\u0442.");
+    llama_batch batch = llama_batch_get_one(tokens.data(), nPromptTokens);
+    if (llama_decode(m_ctx, batch) != 0) {
+        emit errorOccurred("Llama.cpp Error: Не вдалося декодувати стартовий промпт.");
         return;
     }
-    qDebug() << "[GEN] llama_decode \u0443\u0441\u043f\u0456\u0448\u043d\u043e! \u0456\u043d\u0456\u0446\u0456\u0430\u043b\u0456\u0437\u0443\u0454\u043c\u043e \u0441\u0435\u043c\u043f\u043b\u0435\u0440...";
 
-    int n_cur = n_tokens;
-    int n_max = 1024;
+    float generationTemperature;
+    {
+        QMutexLocker locker(&m_mutex);
+        generationTemperature = m_temperature;
+    }
 
-    // Покращене налаштування семплерів для стабільності та уникнення "галюцинацій"
-    llama_sampler * sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.8f));         // Трохи більше 'творчості'
-    llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.1f, 1));    // Суворіше відсікаємо сміття та змішування мов
+    llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(generationTemperature));
+    llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.1f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-    qDebug() << "[GEN] \u0421\u0435\u043c\u043f\u043b\u0435\u0440 \u0441\u0442\u0432\u043e\u0440\u0435\u043d\u043e. \u0421\u0422\u0410\u0420\u0422\u0423\u0404\u041c\u041e \u0426\u0418\u041a\u041b \u0413\u0415\u041d\u0415\u0420\u0410\u0426\u0406\u0407!";
-    
-    while (n_cur <= n_tokens + n_max) {
+
+    QString fullResponse;
+    bool insideTag = false;
+    constexpr int kMaxGeneratedTokens = 1024;
+
+    for (int i = 0; i < kMaxGeneratedTokens; ++i) {
         {
             QMutexLocker locker(&m_mutex);
-            if (m_stopRequested) break;
+            if (m_stopRequested) {
+                break;
+            }
         }
 
-        llama_token new_token_id = llama_sampler_sample(sampler, m_ctx, -1);
-        llama_sampler_accept(sampler, new_token_id);
-        
-        if (llama_vocab_is_eog(vocab, new_token_id)) {
-            qDebug() << "[GEN] EOG \u0442\u043e\u043a\u0435\u043d \u043e\u0442\u0440\u0438\u043c\u0430\u043d\u043e, \u0437\u0443\u043f\u0438\u043d\u044f\u0454\u043c\u043e \u0446\u0438\u043a\u043b.";
+        llama_token newToken = llama_sampler_sample(sampler, m_ctx, -1);
+        llama_sampler_accept(sampler, newToken);
+
+        if (llama_vocab_is_eog(vocab, newToken)) {
             break;
         }
 
         char buf[256];
-        int len = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, false);
-        if (len <= 0) continue;
-        
-        QString piece = QString::fromUtf8(buf, len);
-        fullResponse += piece;
-        emit tokenGenerated(piece);
+        const int len = llama_token_to_piece(vocab, newToken, buf, sizeof(buf), 0, false);
+        if (len > 0) {
+            const QString piece = QString::fromUtf8(buf, len);
+            fullResponse += piece;
 
-        batch = llama_batch_get_one(&new_token_id, 1);
-        if (llama_decode(m_ctx, batch)) {
-            qDebug() << "[GEN] \u041f\u043e\u043c\u0438\u043b\u043a\u0430 decode \u043d\u0430 \u0442\u043e\u043a\u0435\u043d\u0456" << n_cur;
-            emit errorOccurred("\u041f\u043e\u043c\u0438\u043b\u043a\u0430 \u043f\u0456\u0434 \u0447\u0430\u0441 \u0434\u0435\u043a\u043e\u0434\u0443\u0432\u0430\u043d\u043d\u044f \u043d\u0430\u0441\u0442\u0443\u043f\u043d\u043e\u0433\u043e \u0442\u043e\u043a\u0435\u043d\u0430.");
+            QString visiblePiece;
+            visiblePiece.reserve(piece.size());
+            for (const QChar ch : piece) {
+                if (insideTag) {
+                    if (ch == ']') {
+                        insideTag = false;
+                    }
+                    continue;
+                }
+
+                if (ch == '[') {
+                    insideTag = true;
+                    continue;
+                }
+
+                visiblePiece.append(ch);
+            }
+
+            if (!visiblePiece.isEmpty()) {
+                emit tokenGenerated(visiblePiece);
+            }
+        }
+
+        batch = llama_batch_get_one(&newToken, 1);
+        if (llama_decode(m_ctx, batch) != 0) {
+            emit errorOccurred("Помилка під час декодування наступного токена.");
             break;
         }
-        n_cur++;
+
     }
 
-    qDebug() << "[GEN] Цикл завершено. Відповідь:" << fullResponse.left(50);
     llama_sampler_free(sampler);
 
-    // Зберігаємо цей поворот діалогу в пам'ять
     {
         QMutexLocker locker(&m_mutex);
         m_history.append({req.userPrompt, fullResponse.trimmed()});

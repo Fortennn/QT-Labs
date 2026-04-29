@@ -5,6 +5,7 @@
 #include <QTextBrowser>
 #include <QLineEdit>
 #include <QBoxLayout>
+#include <QRegularExpression>
 #include "../ai/LlamaWorkerThread.h"
 
 namespace Ui { class MainWindow; }
@@ -27,7 +28,10 @@ protected:
 
 private:
     void applyPremiumStyles();
-    void setupDynamicUi(); // Нова функція
+    void setupDynamicUi();
+    void handleSystemCommand(const QString& shellCmd, bool isPowerShell);
+    bool isNearBottom() const;
+    void scrollToBottom();
 
     Ui::MainWindow *ui;
     LlamaWorkerThread* aiThread;
@@ -38,6 +42,7 @@ private:
     class QVBoxLayout* chatLayout;
     class QLineEdit* inputField;
     class QPushButton* sendButton;
+    class QWidget* inputWrapper;
 };
 
 #endif // MAINWINDOW_H
