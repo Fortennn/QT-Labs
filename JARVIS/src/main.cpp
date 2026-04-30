@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QDebug>
+#include <QIcon>
 #include "ui/MainWindow.h"
 
 int main(int argc, char *argv[]) {
@@ -13,6 +14,8 @@ int main(int argc, char *argv[]) {
 
     QString basePath = QCoreApplication::applicationDirPath();
     qDebug() << "Application started in Portable mode at:" << basePath;
+
+    app.setWindowIcon(QIcon("C:/Papki/qt-labs/JARVIS/assets/icon.png"));
 
     MainWindow w;
     w.show();
