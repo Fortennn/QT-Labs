@@ -9,19 +9,22 @@
 #include "../ai/LlamaWorkerThread.h"
 
 QT_BEGIN_NAMESPACE
+class QCloseEvent;
 class QFrame;
 class QGraphicsDropShadowEffect;
 class QKeyEvent;
 class QLabel;
-class QLineEdit;
+class QSystemTrayIcon;
 class QPushButton;
 class QScrollArea;
+class QTextEdit;
 class QVBoxLayout;
 class QWidget;
 QT_END_NAMESPACE
 
 namespace Ui { class MainWindow; }
 
+class JarvisHttpServer;
 class MessageWidget;
 class ParticleBackground;
 class SettingsDialog;
@@ -41,6 +44,7 @@ private slots:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     // ---- UI construction ----
@@ -80,6 +84,11 @@ private:
     void appendUserMessage(const QString& text);
     void appendAiMessage(const QString& text);
     void openChatHistoryDialog();
+    void exportCurrentChatAsMarkdown();
+
+    // Inject a small grey "system" status bubble into the chat (e.g.
+    // "✓ Discord opened", or the captured stdout of an `ipconfig` call).
+    void appendSystemBubble(const QString& text);
 
     // ---- System command dispatch ----
     void handleSystemCommand(const QString& shellCmd, bool isPowerShell);
@@ -89,6 +98,26 @@ private:
     bool tryLaunchKnownApp(const QString& alias, const QStringList& extraArgs);
     bool tryCloseProcess(const QString& alias);
     void runHiddenPowerShell(const QString& cmdLine) const;
+    // Run a shell command WITH stdout/stderr capture and dump the (truncated)
+    // output as a system bubble when it finishes. label is prepended to the
+    // bubble text. Returns immediately; QProcess deletes itself on finish.
+    void runCapturedShell(const QString& program,
+                          const QStringList& args,
+                          const QString& label);
+
+    // ---- System tray ----
+    void setupTrayIcon();
+
+    // ---- LAN web server (phone control panel) ----
+    // Apply the persisted server prefs (enabled / port / pin) at startup
+    // and after the user clicks Apply in SettingsDialog. Idempotent: tears
+    // the server down before re-listening if anything changed.
+    void applyServerPreferences();
+    // Slots for JarvisHttpServer signals. The web server runs on the GUI
+    // thread so these are direct calls, but we keep them as slots so they
+    // can also be queued safely.
+    void onWebChatRequested(const QString& message);
+    void onWebCommandRequested(const QString& cmd, bool isPowerShell);
 
     // ---- Members ----
     Ui::MainWindow*     ui              = nullptr;
@@ -98,9 +127,18 @@ private:
     // Manually managed chat widgets
     QScrollArea*  scrollArea   = nullptr;
     QVBoxLayout*  chatLayout   = nullptr;
-    QLineEdit*    inputField   = nullptr;
+    QTextEdit*    inputField   = nullptr;
     QPushButton*  sendButton   = nullptr;
     QFrame*       inputWrapper = nullptr;
+    QSystemTrayIcon* trayIcon  = nullptr;
+    bool          m_quitting   = false;
+
+    // LAN HTTP server for the phone control panel. Owned, lazily created
+    // by applyServerPreferences() so the user can toggle it from Settings.
+    JarvisHttpServer* httpServer    = nullptr;
+    // True while we're waiting for the AI to finish a web-initiated chat
+    // request. onReplyFinished() forwards the result to httpServer when set.
+    bool              m_webChatPending = false;
 
     // Animated background (kept as a member so settings can re-tint it).
     ParticleBackground* particleBg = nullptr;

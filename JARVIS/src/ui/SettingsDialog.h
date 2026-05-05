@@ -57,11 +57,20 @@ private:
     void buildSamplingTab(QWidget* tab);
     void buildPersonaTab(QWidget* tab);
     void buildInterfaceTab(QWidget* tab);
+    void buildServerTab(QWidget* tab);
+
+    // Refresh the read-only LAN URL list and PIN preview based on the
+    // current state of the server fields. Cheap; safe to call repeatedly.
+    void refreshServerUrls();
+
+    // Model
+    QComboBox*       m_modelCombo            = nullptr;
+    QSpinBox*        m_contextSpin           = nullptr;
+    QSpinBox*        m_gpuLayersSpin         = nullptr;
+    QComboBox*       m_promptTemplateCombo   = nullptr;
 
     // Sampling
-    QComboBox*       m_modelCombo            = nullptr;
     QDoubleSpinBox*  m_temperatureSpin       = nullptr;
-    QSpinBox*        m_contextSpin           = nullptr;
     QDoubleSpinBox*  m_topPSpin              = nullptr;
     QSpinBox*        m_topKSpin              = nullptr;
     QDoubleSpinBox*  m_minPSpin              = nullptr;
@@ -76,6 +85,12 @@ private:
     QComboBox*       m_accentCombo           = nullptr;
     QSlider*         m_opacitySlider         = nullptr;
     QCheckBox*       m_timestampsCheck       = nullptr;
+
+    // Server (LAN web control panel)
+    QCheckBox*       m_serverEnableCheck     = nullptr;
+    QSpinBox*        m_serverPortSpin        = nullptr;
+    QLineEdit*       m_serverPinEdit         = nullptr;
+    QPlainTextEdit*  m_serverUrlsView        = nullptr;
 };
 
 #endif // SETTINGSDIALOG_H

@@ -15,6 +15,17 @@ class LlamaWorkerThread : public QThread {
     Q_OBJECT
 
 public:
+    // Which prompt template to wrap the user/assistant turns in. "Auto"
+    // picks one from the model's filename (llama / chatml / mistral /
+    // gemma); the rest force a specific format.
+    enum class PromptTemplate {
+        Auto = 0,
+        ChatML,        // <|im_start|>role\n...<|im_end|>
+        Llama3,        // <|begin_of_text|><|start_header_id|>...
+        Mistral,       // [INST] ... [/INST]
+        Gemma          // <start_of_turn>user/model
+    };
+
     // Tunable generation parameters. Mirror the llama.cpp sampler chain
     // configured in processGeneration().
     struct GenParams {
@@ -25,7 +36,18 @@ public:
         float repeatPenalty = 1.10f;
         int   maxTokens     = 1024;
         int   contextSize   = 2048;
+        // GPU offload — number of transformer layers pushed to the GPU.
+        // 0 = CPU only, 99 = "everything you can fit". llama.cpp clamps
+        // this to the actual layer count, so 99 is the canonical "all".
+        int   gpuLayers     = 99;
+        // Prompt format (affects the wrapper tokens around system / user
+        // / assistant turns). "Auto" sniffs the model filename.
+        PromptTemplate promptTemplate = PromptTemplate::Auto;
     };
+
+    // Pick the most likely prompt template for a given model file path.
+    // Used both for "Auto" mode and to seed the SettingsDialog combo box.
+    static PromptTemplate detectTemplate(const QString& modelPath);
 
     explicit LlamaWorkerThread(QObject* parent = nullptr);
     ~LlamaWorkerThread() override;
@@ -51,6 +73,13 @@ public:
     void queuePrompt(const QString& systemPrompt, const QString& userPrompt);
     void stopGeneration();
     void clearHistory();
+
+    // True while the worker is generating a response or has pending requests.
+    // Lock-free read of an atomic flag — safe to call from any thread.
+    bool    isBusy() const;
+    // Filename of the currently loaded model (e.g. "llama-3.1-8b.gguf"),
+    // or empty if no model is loaded. Read snapshot of m_loadedModelPath.
+    QString loadedModelName() const;
 
 signals:
     void modelLoaded(bool success);
@@ -80,12 +109,17 @@ private:
     };
     QQueue<Request> m_requests;
     QString m_modelPathToLoad;
+    QString m_loadedModelPath;
 
     GenParams m_gen;                  // protected by m_mutex
     QString   m_systemPromptOverride; // protected by m_mutex
 
     bool m_stopRequested = false;
     bool m_quitThread    = false;
+    // True from queuePrompt() until the corresponding processGeneration()
+    // returns. Read via isBusy() to gate concurrent web requests so the
+    // worker only handles one prompt at a time.
+    bool m_busy          = false;
 
     void processGeneration(const Request& req);
 };

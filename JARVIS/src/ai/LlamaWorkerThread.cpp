@@ -1,10 +1,32 @@
 #include "LlamaWorkerThread.h"
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 #include <QThread>
 #include <llama.h>
 #include <vector>
 #include <string>
+
+LlamaWorkerThread::PromptTemplate
+LlamaWorkerThread::detectTemplate(const QString& modelPath) {
+    const QString name = QFileInfo(modelPath).fileName().toLower();
+    // Order matters: more specific tokens before generic ones.
+    if (name.contains(QStringLiteral("llama-3"))
+        || name.contains(QStringLiteral("llama3"))
+        || name.contains(QStringLiteral("meta-llama"))) {
+        return PromptTemplate::Llama3;
+    }
+    if (name.contains(QStringLiteral("mistral"))
+        || name.contains(QStringLiteral("mixtral"))) {
+        return PromptTemplate::Mistral;
+    }
+    if (name.contains(QStringLiteral("gemma"))) {
+        return PromptTemplate::Gemma;
+    }
+    // dolphin / qwen / openchat / yi / nous / hermes / phi-3-medium-instruct
+    // and most fine-tunes default to ChatML.
+    return PromptTemplate::ChatML;
+}
 
 LlamaWorkerThread::LlamaWorkerThread(QObject *parent)
     : QThread(parent)
@@ -48,9 +70,15 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
         m_model = nullptr;
     }
 
+    int gpuLayers;
+    {
+        QMutexLocker locker(&m_mutex);
+        gpuLayers = m_gen.gpuLayers;
+    }
     auto mparams = llama_model_default_params();
-    mparams.n_gpu_layers = 0; // Строго CPU
+    mparams.n_gpu_layers = gpuLayers;          // 0=CPU, 99=offload all
     // use_mmap = true (за замовчуванням) - необхідно для завантаження 4.5 GB без виснаження РАМ
+    qDebug() << "[JARVIS CORE] GPU layers requested:" << gpuLayers;
 
     // b4827+: оновлені назви функцій
     m_model = llama_model_load_from_file(modelPath.toUtf8().constData(), mparams);
@@ -85,6 +113,11 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
         return false;
     }
 
+    {
+        QMutexLocker locker(&m_mutex);
+        m_loadedModelPath = modelPath;
+    }
+
     qDebug() << "[JARVIS CORE] Контекст виділено успішно. Готово до роботи!";
     emit modelLoaded(true);
     return true;
@@ -106,6 +139,7 @@ void LlamaWorkerThread::setGenParams(const GenParams& params) {
     if (m_gen.minP        < 0.f)  m_gen.minP         = 0.f;
     if (m_gen.repeatPenalty <= 0.f) m_gen.repeatPenalty = 1.f;
     if (m_gen.temperature  < 0.f) m_gen.temperature  = 0.f;
+    if (m_gen.gpuLayers    < 0)   m_gen.gpuLayers    = 0;
 }
 
 LlamaWorkerThread::GenParams LlamaWorkerThread::genParams() const {
@@ -132,8 +166,20 @@ void LlamaWorkerThread::queueLoadModel(const QString& modelPath) {
 void LlamaWorkerThread::queuePrompt(const QString& systemPrompt, const QString& userPrompt) {
     QMutexLocker locker(&m_mutex);
     m_requests.enqueue({systemPrompt, userPrompt});
+    m_busy = true;
     m_stopRequested = false; 
     m_cond.wakeOne();
+}
+
+bool LlamaWorkerThread::isBusy() const {
+    QMutexLocker locker(&m_mutex);
+    return m_busy || !m_requests.isEmpty();
+}
+
+QString LlamaWorkerThread::loadedModelName() const {
+    QMutexLocker locker(&m_mutex);
+    if (m_loadedModelPath.isEmpty()) return {};
+    return QFileInfo(m_loadedModelPath).fileName();
 }
 
 void LlamaWorkerThread::stopGeneration() {
@@ -171,6 +217,12 @@ void LlamaWorkerThread::run() {
         } else if (!req.userPrompt.isEmpty()) {
             processGeneration(req);
         }
+        // Drop the busy flag once the queue is fully drained so isBusy()
+        // returns false for the LAN web server's concurrency gate.
+        {
+            QMutexLocker locker(&m_mutex);
+            if (m_requests.isEmpty()) m_busy = false;
+        }
     }
 }
 
@@ -182,24 +234,90 @@ void LlamaWorkerThread::processGeneration(const Request& req) {
 
     QString systemPrompt;
     GenParams gen;
+    QString loadedPath;
     {
         QMutexLocker locker(&m_mutex);
         gen = m_gen;
         systemPrompt = m_systemPromptOverride.isEmpty()
                            ? req.systemPrompt
                            : m_systemPromptOverride;
+        loadedPath = m_loadedModelPath;
     }
 
-    QString promptStr = QString("<|im_start|>system\n%1<|im_end|>\n").arg(systemPrompt);
+    PromptTemplate tmpl = gen.promptTemplate;
+    if (tmpl == PromptTemplate::Auto) tmpl = detectTemplate(loadedPath);
 
     int historyStart = qMax(0, m_history.size() - 10);
-    for (int i = historyStart; i < m_history.size(); ++i) {
-        promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(m_history[i].user);
-        promptStr += QString("<|im_start|>assistant\n%1<|im_end|>\n").arg(m_history[i].assistant);
-    }
+    QString promptStr;
 
-    promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(req.userPrompt);
-    promptStr += "<|im_start|>assistant\n";
+    switch (tmpl) {
+    case PromptTemplate::Llama3: {
+        promptStr  = QStringLiteral("<|begin_of_text|>");
+        promptStr += QString("<|start_header_id|>system<|end_header_id|>\n\n%1<|eot_id|>")
+                         .arg(systemPrompt);
+        for (int i = historyStart; i < m_history.size(); ++i) {
+            promptStr += QString("<|start_header_id|>user<|end_header_id|>\n\n%1<|eot_id|>")
+                             .arg(m_history[i].user);
+            promptStr += QString("<|start_header_id|>assistant<|end_header_id|>\n\n%1<|eot_id|>")
+                             .arg(m_history[i].assistant);
+        }
+        promptStr += QString("<|start_header_id|>user<|end_header_id|>\n\n%1<|eot_id|>")
+                         .arg(req.userPrompt);
+        promptStr += QStringLiteral("<|start_header_id|>assistant<|end_header_id|>\n\n");
+        break;
+    }
+    case PromptTemplate::Mistral: {
+        // Mistral chat template: [INST] <<SYS>>...<</SYS>> userMsg [/INST] reply </s>[INST] ... [/INST]
+        bool firstTurn = true;
+        for (int i = historyStart; i < m_history.size(); ++i) {
+            if (firstTurn) {
+                promptStr += QString("[INST] <<SYS>>\n%1\n<</SYS>>\n\n%2 [/INST] ")
+                                 .arg(systemPrompt, m_history[i].user);
+                firstTurn = false;
+            } else {
+                promptStr += QString("[INST] %1 [/INST] ").arg(m_history[i].user);
+            }
+            promptStr += m_history[i].assistant + QStringLiteral("</s>");
+        }
+        if (firstTurn) {
+            promptStr += QString("[INST] <<SYS>>\n%1\n<</SYS>>\n\n%2 [/INST] ")
+                             .arg(systemPrompt, req.userPrompt);
+        } else {
+            promptStr += QString("[INST] %1 [/INST] ").arg(req.userPrompt);
+        }
+        break;
+    }
+    case PromptTemplate::Gemma: {
+        // Gemma has no real "system" role — fold it into the first user turn.
+        bool injectedSystem = false;
+        for (int i = historyStart; i < m_history.size(); ++i) {
+            QString u = m_history[i].user;
+            if (!injectedSystem) {
+                u = systemPrompt + "\n\n" + u;
+                injectedSystem = true;
+            }
+            promptStr += QString("<start_of_turn>user\n%1<end_of_turn>\n").arg(u);
+            promptStr += QString("<start_of_turn>model\n%1<end_of_turn>\n").arg(m_history[i].assistant);
+        }
+        QString u = req.userPrompt;
+        if (!injectedSystem) u = systemPrompt + "\n\n" + u;
+        promptStr += QString("<start_of_turn>user\n%1<end_of_turn>\n").arg(u);
+        promptStr += QStringLiteral("<start_of_turn>model\n");
+        break;
+    }
+    case PromptTemplate::ChatML:
+    case PromptTemplate::Auto:
+    default: {
+        promptStr = QString("<|im_start|>system\n%1<|im_end|>\n").arg(systemPrompt);
+        for (int i = historyStart; i < m_history.size(); ++i) {
+            promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(m_history[i].user);
+            promptStr += QString("<|im_start|>assistant\n%1<|im_end|>\n").arg(m_history[i].assistant);
+        }
+        promptStr += QString("<|im_start|>user\n%1<|im_end|>\n").arg(req.userPrompt);
+        promptStr += QStringLiteral("<|im_start|>assistant\n");
+        break;
+    }
+    }
 
     const std::string prompt = promptStr.toStdString();
     const llama_vocab* vocab = llama_model_get_vocab(m_model);

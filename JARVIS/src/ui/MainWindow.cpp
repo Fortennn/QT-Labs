@@ -2,6 +2,7 @@
 #include "ui_MainWindow.h"
 
 #include "ai/SystemPrompt.h"
+#include "net/JarvisHttpServer.h"
 #include "ui/SettingsDialog.h"
 #include "ui/WelcomeDialog.h"
 #include "widgets/BrainVisualizer.h"
@@ -24,8 +25,17 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QCloseEvent>
+#include <QFileDialog>
+#include <QIcon>
+#include <QAction>
 #include <QLineEdit>
+#include <QMenu>
 #include <QObject>
+#include <QSystemTrayIcon>
+#include <QTextDocument>
+#include <QTextEdit>
+#include <functional>
 #include <QPainter>
 #include <QPainterPath>
 #include <QProcess>
@@ -139,14 +149,15 @@ private:
     QPropertyAnimation*        m_colorAnim = nullptr;
 };
 
-// ---------- Focus animator for QLineEdit ----------------------------------------------------
+// ---------- Focus animator for the input widget ---------------------------------------------
 //
 // Animates the input wrapper's drop-shadow color/blur and updates the wrapper's
-// dynamic "focused" property (driven from QSS) when the line edit gains/loses
-// focus, producing a soft accent glow.
+// dynamic "focused" property (driven from QSS) when the input widget gains or
+// loses focus, producing a soft accent glow. We accept any QWidget so the
+// wrapper works for both QLineEdit and QTextEdit.
 class FocusGlowAnimator : public QObject {
 public:
-    FocusGlowAnimator(QLineEdit* lineEdit,
+    FocusGlowAnimator(QWidget* lineEdit,
                       QFrame* wrapper,
                       QGraphicsDropShadowEffect* effect)
         : QObject(lineEdit),
@@ -198,11 +209,66 @@ private:
         m_colorAnim->start();
     }
 
-    QLineEdit*                  m_lineEdit = nullptr;
+    QWidget*                    m_lineEdit = nullptr;
     QFrame*                     m_wrapper  = nullptr;
     QGraphicsDropShadowEffect*  m_effect   = nullptr;
     QPropertyAnimation*         m_blurAnim  = nullptr;
     QPropertyAnimation*         m_colorAnim = nullptr;
+};
+
+// ---------- Multi-line text input -----------------------------------------------------------
+//
+// QTextEdit subclass that:
+//   * sends on plain Enter (calls onUserInput via the host MainWindow);
+//   * inserts a newline on Shift+Enter;
+//   * grows vertically with content up to a hard cap so the input row stays
+//     compact for short messages but lets the user type a paragraph.
+class ChatInputEdit : public QTextEdit {
+public:
+    using SendFn = std::function<void()>;
+
+    explicit ChatInputEdit(SendFn onSend, QWidget* parent = nullptr)
+        : QTextEdit(parent), m_onSend(std::move(onSend))
+    {
+        setAcceptRichText(false);
+        setTabChangesFocus(true);
+        setFrameShape(QFrame::NoFrame);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setLineWrapMode(QTextEdit::WidgetWidth);
+        setPlaceholderText(QStringLiteral(
+            "Message JARVIS…   (Enter — надіслати, Shift+Enter — новий рядок)"));
+        connect(document(), &QTextDocument::contentsChanged,
+                this, &ChatInputEdit::adjustHeightToContent);
+        adjustHeightToContent();
+    }
+
+protected:
+    void keyPressEvent(QKeyEvent* e) override {
+        const bool isEnter = (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter);
+        const bool shift   = e->modifiers().testFlag(Qt::ShiftModifier);
+        if (isEnter && !shift) {
+            if (m_onSend) m_onSend();
+            return;
+        }
+        QTextEdit::keyPressEvent(e);
+    }
+
+private:
+    void adjustHeightToContent() {
+        // 1 line ~= fontMetrics().height() + a couple of pixels for descender.
+        const int oneLine = qMax(20, fontMetrics().height() + 4);
+        const int padding = 14;     // top + bottom internal padding
+        const int maxLines = 6;
+        document()->setTextWidth(viewport() ? viewport()->width() : width());
+        const int docH = static_cast<int>(document()->size().height());
+        const int desired = qBound(oneLine + padding,
+                                   docH + padding,
+                                   oneLine * maxLines + padding);
+        if (desired != height()) setFixedHeight(desired);
+    }
+
+    SendFn m_onSend;
 };
 
 // ---------- Tiny utility helpers ------------------------------------------------------------
@@ -559,6 +625,8 @@ MainWindow::MainWindow(QWidget* parent)
         }
         applyUiPreferences(dlg);
         refreshUserChip();
+        // Toggle / port / pin may have changed — re-apply the LAN server.
+        applyServerPreferences();
     });
 
     connect(aiThread, &LlamaWorkerThread::tokenGenerated,
@@ -572,6 +640,12 @@ MainWindow::MainWindow(QWidget* parent)
     connect(aiThread, &LlamaWorkerThread::errorOccurred, this, [this](const QString& err) {
         addMessage(QStringLiteral("ERROR: ") + err, false);
         setGenerating(false);
+        // If a phone is parked on /api/chat, surface the error there too
+        // so the mobile UI doesn't hang on "JARVIS думає…" forever.
+        if (m_webChatPending && httpServer) {
+            m_webChatPending = false;
+            httpServer->failWebChat(500, err);
+        }
     }, Qt::QueuedConnection);
 
     connect(aiThread, &LlamaWorkerThread::modelLoaded, this, [this](bool success) {
@@ -600,12 +674,26 @@ MainWindow::MainWindow(QWidget* parent)
     installSendButtonAnimation();
     installSideButtonAnimations();
     installInputFocusAnimation();
+
+    // 6. System tray. Safe no-op on systems without one.
+    setupTrayIcon();
+
+    // 7. LAN web server (phone control panel). Reads QSettings; no-op if
+    //    the user disabled it. Spinning up after the AI thread + tray so
+    //    /api/status reports a sensible model name immediately.
+    applyServerPreferences();
 }
 
 MainWindow::~MainWindow() {
     // Persist whatever the user typed before we tear everything down.
     saveCurrentChat();
 
+    if (httpServer) {
+        httpServer->stop();
+        // Owned-by-this; deleteLater lets pending socket events drain.
+        httpServer->deleteLater();
+        httpServer = nullptr;
+    }
     if (aiThread) {
         aiThread->stopGeneration();
         aiThread->quit();
@@ -811,22 +899,31 @@ void MainWindow::setupDynamicUi() {
     inputLayout->setContentsMargins(20, 10, 10, 10);
     inputLayout->setSpacing(12);
 
-    inputField = new QLineEdit(inputWrapper);
-    inputField->setPlaceholderText(QStringLiteral("Message JARVIS…"));
+    inputField = new ChatInputEdit([this]() { onUserInput(); }, inputWrapper);
     inputField->setStyleSheet(R"QSS(
-        QLineEdit {
+        QTextEdit {
             background: transparent;
             color: #e6edf3;
             border: none;
             font-size: 14.5px;
             font-weight: 500;
-            padding: 6px 4px;
+            padding: 4px 2px;
             selection-background-color: #2f81f7;
         }
-        QLineEdit::placeholder {
-            color: #6b7a90;
-            font-style: italic;
+        QScrollBar:vertical {
+            background: transparent;
+            width: 8px;
+            margin: 4px 0 4px 0;
         }
+        QScrollBar::handle:vertical {
+            background: rgba(80, 100, 130, 140);
+            border-radius: 4px;
+            min-height: 24px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: rgba(120, 150, 200, 200);
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
     )QSS");
 
     // ---- Send button: gradient circle with chevron + animated glow ----
@@ -873,9 +970,9 @@ void MainWindow::setupDynamicUi() {
 
     mainLayout->addWidget(stackedRoot);
 
-    // Connections
+    // Connections — Enter is wired up inside ChatInputEdit so we don't need
+    // returnPressed() here. The send button still routes through onUserInput.
     connect(sendButton, &QPushButton::clicked, this, &MainWindow::onUserInput);
-    connect(inputField, &QLineEdit::returnPressed, this, &MainWindow::onUserInput);
 }
 
 void MainWindow::installSendButtonAnimation() {
@@ -1024,6 +1121,35 @@ void MainWindow::buildSidebar() {
     connect(btnHistory, &QPushButton::clicked,
             this, &MainWindow::openChatHistoryDialog);
 
+    // ---- 3b. "Експорт чату" (markdown). Same look as btn_history. ----
+    auto* btnExport = new QPushButton(QStringLiteral("Експорт чату"), this);
+    btnExport->setObjectName(QStringLiteral("btn_export"));
+    btnExport->setCursor(Qt::PointingHandCursor);
+    btnExport->setMinimumHeight(36);
+    btnExport->setStyleSheet(QStringLiteral(R"_(
+        QPushButton#btn_export {
+            background: rgba(20, 28, 40, 200);
+            color: #b6c4d8;
+            border: 1px solid rgba(60, 78, 102, 160);
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 11.5px;
+            font-weight: 600;
+            letter-spacing: 0.6px;
+        }
+        QPushButton#btn_export:hover {
+            border-color: #2f81f7;
+            color: #ffffff;
+        }
+    )_"));
+    {
+        const int insertAt =
+            ui->sideLayout->indexOf(btnHistory) + 1;
+        ui->sideLayout->insertWidget(insertAt, btnExport);
+    }
+    connect(btnExport, &QPushButton::clicked,
+            this, &MainWindow::exportCurrentChatAsMarkdown);
+
     // No standalone Stop button — the Send button morphs into Stop while
     // generating. See setGenerating().
 
@@ -1171,6 +1297,12 @@ void MainWindow::applyPersistedPreferences() {
         gen.repeatPenalty = static_cast<float>(s.value("settings/repeatPenalty").toDouble());
     if (s.contains(QStringLiteral("settings/maxTokens")))
         gen.maxTokens = s.value("settings/maxTokens").toInt();
+    if (s.contains(QStringLiteral("settings/gpuLayers")))
+        gen.gpuLayers = s.value("settings/gpuLayers").toInt();
+    if (s.contains(QStringLiteral("settings/promptTemplate"))) {
+        gen.promptTemplate = static_cast<LlamaWorkerThread::PromptTemplate>(
+            s.value("settings/promptTemplate").toInt());
+    }
     if (aiThread) aiThread->setGenParams(gen);
 
     if (s.contains(QStringLiteral("settings/systemPrompt"))) {
@@ -1469,7 +1601,7 @@ void MainWindow::onUserInput() {
         return;
     }
 
-    const QString text = inputField->text().trimmed();
+    const QString text = inputField->toPlainText().trimmed();
     if (text.isEmpty()) return;
 
     appendUserMessage(text);
@@ -1496,6 +1628,10 @@ void MainWindow::updateAiStream(const QString& token) {
 }
 
 void MainWindow::onReplyFinished(const QString& fullResponse) {
+    // Strip the streaming caret and run markdown -> HTML on the visible
+    // bubble before we drop our handle on it.
+    if (currentAiBubble) currentAiBubble->finalize();
+
     static const QRegularExpression cmdRegex(
         QStringLiteral(R"(\[(cmd|ps)\s*:\s*([^\]]+)\])"),
         QRegularExpression::CaseInsensitiveOption);
@@ -1510,11 +1646,26 @@ void MainWindow::onReplyFinished(const QString& fullResponse) {
     }
 
     // Persist the full visible AI response into the current chat record.
-    if (!m_currentAiText.trimmed().isEmpty()) {
-        appendAiMessage(m_currentAiText.trimmed());
+    const QString trimmedAi = m_currentAiText.trimmed();
+    if (!trimmedAi.isEmpty()) {
+        appendAiMessage(trimmedAi);
     }
     m_currentAiText.clear();
     currentAiBubble = nullptr;
+
+    // If this reply was kicked off by a phone via /api/chat, finish the
+    // HTTP response now (the socket has been parked since the request
+    // arrived). Strip the [CMD:..]/[PS:..] tags so the phone gets clean text.
+    if (m_webChatPending && httpServer) {
+        m_webChatPending = false;
+        QString clean = fullResponse;
+        static const QRegularExpression tagsRe(
+            QStringLiteral(R"(\[(?:cmd|ps)\s*:\s*[^\]]+\])"),
+            QRegularExpression::CaseInsensitiveOption);
+        clean.remove(tagsRe);
+        clean = clean.trimmed();
+        httpServer->completeWebChat(clean.isEmpty() ? trimmedAi : clean);
+    }
 }
 
 // =============================================================================
@@ -1525,10 +1676,14 @@ void MainWindow::handleSystemCommand(const QString& shellCmd, bool isPowerShell)
     const QString trimmed = shellCmd.trimmed();
     if (trimmed.isEmpty()) return;
 
-    // [PS: ...] — always send to a hidden PowerShell. PowerShell already
-    // resolves Start-Process / Stop-Process / taskkill etc. correctly.
+    // [PS: ...] — capture output. PowerShell resolves Start-Process /
+    // Stop-Process / taskkill / Get-* / etc. naturally.
     if (isPowerShell) {
-        runHiddenPowerShell(trimmed);
+        runCapturedShell(QStringLiteral("powershell.exe"),
+                         {QStringLiteral("-NoProfile"),
+                          QStringLiteral("-WindowStyle"), QStringLiteral("Hidden"),
+                          QStringLiteral("-Command"), trimmed},
+                         QStringLiteral("PS> ") + trimmed);
         return;
     }
 
@@ -1554,8 +1709,14 @@ void MainWindow::handleSystemCommand(const QString& shellCmd, bool isPowerShell)
         const QString tail   = m.captured(3).trimmed();
         QStringList tailArgs = tail.isEmpty() ? QStringList() : QProcess::splitCommand(tail);
 
-        if (tryOpenUrlOrFile(target))                        return;
-        if (tryLaunchKnownApp(target, tailArgs))             return;
+        if (tryOpenUrlOrFile(target)) {
+            appendSystemBubble(QStringLiteral("✓ Відкрито: %1").arg(target));
+            return;
+        }
+        if (tryLaunchKnownApp(target, tailArgs)) {
+            appendSystemBubble(QStringLiteral("✓ Запущено: %1").arg(target));
+            return;
+        }
 
         // Fallback: hand off to PowerShell's `Start-Process` so the App Paths
         // registry can locate exotic apps. Run the PS itself hidden so no
@@ -1569,35 +1730,54 @@ void MainWindow::handleSystemCommand(const QString& shellCmd, bool isPowerShell)
             launch += QStringLiteral(" -ArgumentList '%1'").arg(psTail);
         }
         runHiddenPowerShell(launch);
+        appendSystemBubble(QStringLiteral("→ Спроба запуску через PowerShell: %1").arg(target));
         return;
     }
 
     // ---- 2. close/kill/stop ----
     if (auto m = closeRe.match(trimmed); m.hasMatch()) {
         const QString name = !m.captured(1).isEmpty() ? m.captured(1) : m.captured(2);
-        if (tryCloseProcess(name)) return;
+        if (tryCloseProcess(name)) {
+            appendSystemBubble(QStringLiteral("✓ Закрито: %1").arg(name));
+            return;
+        }
+        appendSystemBubble(QStringLiteral("⚠ Не вдалося закрити: %1").arg(name));
+        return;
     }
 
     // ---- 3. bare alias (e.g. just "chrome") ----
     if (auto m = bareRe.match(trimmed); m.hasMatch()) {
         const QString alias = m.captured(1);
-        if (tryOpenUrlOrFile(alias))                  return;
-        if (tryLaunchKnownApp(alias, /*extra=*/{}))   return;
+        if (tryOpenUrlOrFile(alias)) {
+            appendSystemBubble(QStringLiteral("✓ Відкрито: %1").arg(alias));
+            return;
+        }
+        if (tryLaunchKnownApp(alias, /*extra=*/{})) {
+            appendSystemBubble(QStringLiteral("✓ Запущено: %1").arg(alias));
+            return;
+        }
     }
 
     // ---- 4. Already a taskkill / Stop-Process / Get-Process / etc. ----
-    //    Run via hidden PowerShell so console doesn't flash.
+    //    Run via hidden PowerShell with output capture so the user sees
+    //    a result.
     static const QRegularExpression silentRe(
         QStringLiteral(R"_(^\s*(taskkill|tskill|stop-process|get-process|start-process)\b)_"),
         QRegularExpression::CaseInsensitiveOption);
     if (silentRe.match(trimmed).hasMatch()) {
-        runHiddenPowerShell(trimmed);
+        runCapturedShell(QStringLiteral("powershell.exe"),
+                         {QStringLiteral("-NoProfile"),
+                          QStringLiteral("-WindowStyle"), QStringLiteral("Hidden"),
+                          QStringLiteral("-Command"), trimmed},
+                         QStringLiteral("> ") + trimmed);
         return;
     }
 
-    // ---- 5. Fallback: classic cmd /c (matches the original behavior) ----
-    QProcess::startDetached(QStringLiteral("cmd.exe"),
-                            {QStringLiteral("/c"), trimmed});
+    // ---- 5. Fallback: classic cmd /c, but capture so the user sees output
+    //    (ipconfig, dir, netstat, etc.).
+    runCapturedShell(QStringLiteral("cmd.exe"),
+                     {QStringLiteral("/c"), trimmed},
+                     QStringLiteral("> ") + trimmed);
 }
 
 bool MainWindow::tryOpenUrlOrFile(const QString& target) {
@@ -1690,6 +1870,243 @@ void MainWindow::runHiddenPowerShell(const QString& cmdLine) const {
     });
 }
 
+// Run a shell command WITH stdout/stderr capture and emit a system bubble
+// when it finishes. The QProcess auto-deletes itself on completion.
+void MainWindow::runCapturedShell(const QString& program,
+                                  const QStringList& args,
+                                  const QString& label)
+{
+    auto* proc = new QProcess(this);
+    proc->setProcessChannelMode(QProcess::MergedChannels);
+#ifdef Q_OS_WIN
+    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) {
+        // CREATE_NO_WINDOW = 0x08000000 — suppresses the black console flash.
+        a->flags |= 0x08000000;
+    });
+#endif
+
+    appendSystemBubble(label);
+
+    connect(proc,
+        QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+        this,
+        [this, proc, label](int exitCode, QProcess::ExitStatus /*status*/) {
+            QString out = QString::fromLocal8Bit(proc->readAllStandardOutput());
+            // Trim ANSI / trailing whitespace and clamp to a sensible chunk.
+            out = out.trimmed();
+            const int kMaxOut = 2000;
+            if (out.size() > kMaxOut) {
+                out = out.left(kMaxOut) + QStringLiteral("\n…(обрізано)");
+            }
+            if (out.isEmpty()) {
+                appendSystemBubble(QStringLiteral("✓ Готово (код %1)").arg(exitCode));
+            } else {
+                appendSystemBubble(QStringLiteral("Вивід (код %1):\n```\n%2\n```")
+                                       .arg(QString::number(exitCode), out));
+            }
+            proc->deleteLater();
+        });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError) {
+        appendSystemBubble(QStringLiteral("⚠ Помилка процесу: %1")
+                               .arg(proc->errorString()));
+        proc->deleteLater();
+    });
+
+    proc->start(program, args);
+}
+
+// Push a small grey "system" bubble into the chat log. Persisted into the
+// current chat record so re-opening the chat shows the same status line.
+void MainWindow::appendSystemBubble(const QString& text) {
+    if (!chatLayout) return;
+    auto* w = new MessageWidget(text, MessageWidget::Kind::System, this);
+    // chatLayout always ends with addStretch() — insert before that.
+    chatLayout->insertWidget(chatLayout->count() - 1, w);
+    if (isNearBottom()) scrollToBottom();
+    // Do NOT persist into m_currentMessages — system pills are ephemeral.
+}
+
+// =============================================================================
+//  Chat export
+// =============================================================================
+
+void MainWindow::exportCurrentChatAsMarkdown() {
+    if (m_currentMessages.isEmpty()) return;
+
+    const QString defaultName = QStringLiteral("jarvis-chat-%1.md")
+        .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+    const QString suggested = QDir(QStandardPaths::writableLocation(
+                                      QStandardPaths::DocumentsLocation))
+                                  .filePath(defaultName);
+
+    const QString file = QFileDialog::getSaveFileName(
+        this, QStringLiteral("Експорт чату"), suggested,
+        QStringLiteral("Markdown (*.md);;Текст (*.txt);;Усі файли (*.*)"));
+    if (file.isEmpty()) return;
+
+    QString out;
+    out += QStringLiteral("# %1\n\n")
+               .arg(m_currentChatTitle.isEmpty()
+                        ? QStringLiteral("Чат JARVIS") : m_currentChatTitle);
+    out += QStringLiteral("_Експортовано: %1_\n\n---\n\n")
+               .arg(QDateTime::currentDateTime().toString(Qt::ISODate));
+    for (const StoredMessage& m : m_currentMessages) {
+        out += QStringLiteral("**%1** _(%2)_\n\n%3\n\n")
+                   .arg(m.isUser ? QStringLiteral("Ти") : QStringLiteral("JARVIS"),
+                        m.time.toString(QStringLiteral("yyyy-MM-dd HH:mm")),
+                        m.text);
+    }
+
+    QFile f(file);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        appendSystemBubble(QStringLiteral("⚠ Не вдалося відкрити файл для запису"));
+        return;
+    }
+    f.write(out.toUtf8());
+    f.close();
+    appendSystemBubble(QStringLiteral("✓ Чат збережено у %1").arg(file));
+}
+
+// =============================================================================
+//  System tray
+// =============================================================================
+
+void MainWindow::setupTrayIcon() {
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) return;
+
+    trayIcon = new QSystemTrayIcon(this);
+    trayIcon->setIcon(windowIcon().isNull() ? QIcon(QStringLiteral(":/assets/icon.png"))
+                                            : windowIcon());
+    trayIcon->setToolTip(QStringLiteral("JARVIS — Personal AI Core"));
+
+    auto* menu = new QMenu(this);
+    auto* showAct = menu->addAction(QStringLiteral("Показати JARVIS"));
+    auto* hideAct = menu->addAction(QStringLiteral("Сховати"));
+    menu->addSeparator();
+    auto* quitAct = menu->addAction(QStringLiteral("Вийти"));
+
+    connect(showAct, &QAction::triggered, this, [this]() {
+        showNormal();
+        raise();
+        activateWindow();
+    });
+    connect(hideAct, &QAction::triggered, this, &QWidget::hide);
+    connect(quitAct, &QAction::triggered, this, [this]() {
+        m_quitting = true;
+        QCoreApplication::quit();
+    });
+
+    trayIcon->setContextMenu(menu);
+
+    connect(trayIcon, &QSystemTrayIcon::activated,
+            this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger ||
+            reason == QSystemTrayIcon::DoubleClick) {
+            if (isVisible()) hide();
+            else { showNormal(); raise(); activateWindow(); }
+        }
+    });
+    trayIcon->show();
+}
+
+// =============================================================================
+//  LAN web server (phone control panel)
+// =============================================================================
+
+void MainWindow::applyServerPreferences() {
+    QSettings s;
+    const bool    enabled = s.value(QStringLiteral("server/enabled"),
+                                    false).toBool();
+    const quint16 port    = static_cast<quint16>(
+                                s.value(QStringLiteral("server/port"),
+                                        17320).toInt());
+    const QString pin     = s.value(QStringLiteral("server/pin")).toString();
+
+    if (!enabled) {
+        if (httpServer) {
+            httpServer->stop();
+            httpServer->deleteLater();
+            httpServer = nullptr;
+        }
+        return;
+    }
+
+    // Lazy-create on first enable, then reconfigure on later edits. Using
+    // restart() == stop+listen guarantees we re-bind the new port if the
+    // user changed it from Settings.
+    if (!httpServer) {
+        httpServer = new JarvisHttpServer(this);
+        connect(httpServer, &JarvisHttpServer::webCommandRequested,
+                this, &MainWindow::onWebCommandRequested);
+        connect(httpServer, &JarvisHttpServer::webChatRequested,
+                this, &MainWindow::onWebChatRequested);
+        // Phone edited the quick-action grid — persist the new layout so it
+        // survives restart and stays consistent across all connected clients.
+        connect(httpServer, &JarvisHttpServer::buttonsChanged,
+                this, [](const QByteArray& json) {
+            QSettings s2;
+            s2.setValue(QStringLiteral("server/buttons"),
+                        QString::fromUtf8(json));
+        });
+    }
+    httpServer->setStatusProvider(
+        aiThread,
+        s.value(QStringLiteral("user/name")).toString());
+    httpServer->setPin(pin);
+    // Hydrate the in-memory button set from QSettings (or seed with defaults
+    // on first run). The setter validates the JSON, so a corrupt value
+    // gracefully falls back to the built-in layout.
+    const QByteArray savedButtons =
+        s.value(QStringLiteral("server/buttons")).toString().toUtf8();
+    httpServer->setButtonsJson(
+        savedButtons.isEmpty()
+            ? JarvisHttpServer::defaultButtonsJson()
+            : savedButtons);
+    if (!httpServer->start(port)) {
+        appendSystemBubble(QStringLiteral(
+            "⚠ Не вдалося запустити веб-сервер на порту %1 — імовірно зайнятий.")
+            .arg(port));
+        delete httpServer;
+        httpServer = nullptr;
+        // Reflect the failure back into QSettings so the toggle on the
+        // next Settings open is honest about state.
+        s.setValue(QStringLiteral("server/enabled"), false);
+        return;
+    }
+    appendSystemBubble(QStringLiteral(
+        "✓ JARVIS-сервер запущено на порту %1. URL для телефону: %2")
+        .arg(port)
+        .arg(JarvisHttpServer::lanUrls(port).join(QStringLiteral(", "))));
+}
+
+void MainWindow::onWebChatRequested(const QString& message) {
+    if (!aiThread) {
+        if (httpServer) httpServer->failWebChat(503, QStringLiteral("AI offline"));
+        return;
+    }
+    if (m_generating || aiThread->isBusy()) {
+        if (httpServer)
+            httpServer->failWebChat(503,
+                QStringLiteral("Зайнято — JARVIS зараз відповідає."));
+        return;
+    }
+    // Surface the phone's question on the desktop so the user sees it too.
+    appendUserMessage(message);
+    currentAiBubble = new MessageWidget(QString(), /*isUser=*/false, this);
+    if (chatLayout) {
+        const int insertAt = chatLayout->count() - 1;
+        chatLayout->insertWidget(qMax(0, insertAt), currentAiBubble);
+    }
+    m_currentAiText.clear();
+    m_webChatPending = true;
+    setGenerating(true);
+    aiThread->queuePrompt(Config::SYSTEM_PROMPT, message);
+}
+
+void MainWindow::onWebCommandRequested(const QString& cmd, bool isPowerShell) {
+    handleSystemCommand(cmd, isPowerShell);
+}
+
 // =============================================================================
 //  Misc
 // =============================================================================
@@ -1701,4 +2118,24 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
     QMainWindow::keyPressEvent(event);
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    // First close while the tray is up: minimize-to-tray and notify.
+    if (trayIcon && trayIcon->isVisible() && !m_quitting) {
+        QSettings s;
+        const bool warned = s.value(QStringLiteral("ui/trayWarned")).toBool();
+        if (!warned) {
+            trayIcon->showMessage(
+                QStringLiteral("JARVIS"),
+                QStringLiteral("Працюю у треї. Подвійний клік по іконці — відкрити; "
+                               "правий клік — меню."),
+                QSystemTrayIcon::Information, 4000);
+            s.setValue(QStringLiteral("ui/trayWarned"), true);
+        }
+        hide();
+        event->ignore();
+        return;
+    }
+    QMainWindow::closeEvent(event);
 }

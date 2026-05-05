@@ -3,6 +3,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -20,6 +21,7 @@
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QRandomGenerator>
 #include <QScrollArea>
 #include <QSettings>
 #include <QSizePolicy>
@@ -28,10 +30,12 @@
 #include <QTabWidget>
 #include <QToolButton>
 #include <QToolTip>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include "../ai/SystemPrompt.h"
+#include "../net/JarvisHttpServer.h"
 #include "WelcomeDialog.h"
 
 namespace {
@@ -208,6 +212,11 @@ constexpr const char* kK_AccentRgb     = "settings/accentRgb";
 constexpr const char* kK_Opacity       = "settings/opacityPct";
 constexpr const char* kK_Timestamps    = "settings/showTimestamps";
 constexpr const char* kK_UserName      = "user/name";
+constexpr const char* kK_GpuLayers     = "settings/gpuLayers";
+constexpr const char* kK_PromptTpl     = "settings/promptTemplate";
+constexpr const char* kK_ServerEnabled = "server/enabled";
+constexpr const char* kK_ServerPort    = "server/port";
+constexpr const char* kK_ServerPin     = "server/pin";
 
 } // namespace
 
@@ -277,6 +286,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     makeScrollableTab(&SettingsDialog::buildSamplingTab,  QStringLiteral("  Семплінг  "));
     makeScrollableTab(&SettingsDialog::buildPersonaTab,   QStringLiteral("  Персона  "));
     makeScrollableTab(&SettingsDialog::buildInterfaceTab, QStringLiteral("  Інтерфейс  "));
+    makeScrollableTab(&SettingsDialog::buildServerTab,    QStringLiteral("  Сервер  "));
 
     root->addWidget(tabs, /*stretch=*/1);
 
@@ -507,6 +517,47 @@ void SettingsDialog::buildModelTab(QWidget* tab) {
                        "повільніше і потребує більше RAM."),
         QString(),
         m_contextSpin,
+        nullptr
+    }));
+
+    // --- GPU layers card ---
+    m_gpuLayersSpin = new QSpinBox(tab);
+    m_gpuLayersSpin->setRange(0, 999);
+    m_gpuLayersSpin->setSingleStep(1);
+    m_gpuLayersSpin->setValue(99);
+    m_gpuLayersSpin->setSuffix(QStringLiteral("  шарів"));
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("GPU offload (n_gpu_layers)"),
+        QStringLiteral("Скільки шарів моделі вивантажити на відеокарту. "
+                       "0 — повністю CPU (повільно). 99 — все, що влізе у "
+                       "VRAM (рекомендовано). Якщо JARVIS падає або модель не "
+                       "стартує — зменш значення (наприклад, 35) до тих пір, "
+                       "поки вистачає VRAM. Потребує білду llama.cpp із CUDA."),
+        QString(),
+        m_gpuLayersSpin,
+        nullptr
+    }));
+
+    // --- Prompt template card ---
+    m_promptTemplateCombo = new QComboBox(tab);
+    m_promptTemplateCombo->addItem(QStringLiteral("Авто (за іменем файлу)"),
+                                   int(LlamaWorkerThread::PromptTemplate::Auto));
+    m_promptTemplateCombo->addItem(QStringLiteral("ChatML (dolphin / qwen / hermes)"),
+                                   int(LlamaWorkerThread::PromptTemplate::ChatML));
+    m_promptTemplateCombo->addItem(QStringLiteral("Llama 3 / 3.1 / 3.2"),
+                                   int(LlamaWorkerThread::PromptTemplate::Llama3));
+    m_promptTemplateCombo->addItem(QStringLiteral("Mistral / Mixtral"),
+                                   int(LlamaWorkerThread::PromptTemplate::Mistral));
+    m_promptTemplateCombo->addItem(QStringLiteral("Gemma"),
+                                   int(LlamaWorkerThread::PromptTemplate::Gemma));
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Шаблон промпту"),
+        QStringLiteral("У якому форматі обгортати system / user / assistant. "
+                       "«Авто» вгадує за іменем файлу. Якщо модель «галюцинує» "
+                       "псевдо-теги або відмовляється відповідати — спробуй "
+                       "вибрати правильний шаблон вручну."),
+        QString(),
+        m_promptTemplateCombo,
         nullptr
     }));
 
@@ -770,11 +821,17 @@ void SettingsDialog::resetToDefaults() {
     if (m_minPSpin)          m_minPSpin->setValue(0.10);
     if (m_repeatPenaltySpin) m_repeatPenaltySpin->setValue(1.10);
     if (m_maxTokensSpin)     m_maxTokensSpin->setValue(1024);
+    if (m_gpuLayersSpin)     m_gpuLayersSpin->setValue(99);
+    if (m_promptTemplateCombo) m_promptTemplateCombo->setCurrentIndex(0);
     if (m_systemPromptEdit)  m_systemPromptEdit->setPlainText(Config::SYSTEM_PROMPT);
     if (m_userNameEdit)      m_userNameEdit->clear();
     if (m_accentCombo)       m_accentCombo->setCurrentIndex(0);
     if (m_opacitySlider)     m_opacitySlider->setValue(100);
     if (m_timestampsCheck)   m_timestampsCheck->setChecked(true);
+    if (m_serverEnableCheck) m_serverEnableCheck->setChecked(false);
+    if (m_serverPortSpin)    m_serverPortSpin->setValue(17320);
+    if (m_serverPinEdit)     m_serverPinEdit->clear();
+    refreshServerUrls();
 }
 
 void SettingsDialog::save() const {
@@ -787,11 +844,19 @@ void SettingsDialog::save() const {
     s.setValue(kK_MinP,         m_minPSpin->value());
     s.setValue(kK_RepeatPen,    m_repeatPenaltySpin->value());
     s.setValue(kK_MaxTokens,    m_maxTokensSpin->value());
+    s.setValue(kK_GpuLayers,    m_gpuLayersSpin ? m_gpuLayersSpin->value() : 99);
+    s.setValue(kK_PromptTpl,    m_promptTemplateCombo ? m_promptTemplateCombo->currentData().toInt() : 0);
     s.setValue(kK_SystemPrompt, m_systemPromptEdit->toPlainText());
     s.setValue(kK_AccentRgb,    getAccentColor().rgb());
     s.setValue(kK_Opacity,      m_opacitySlider->value());
     s.setValue(kK_Timestamps,   m_timestampsCheck->isChecked());
     s.setValue(kK_UserName,     getUserName());
+    if (m_serverEnableCheck)
+        s.setValue(kK_ServerEnabled, m_serverEnableCheck->isChecked());
+    if (m_serverPortSpin)
+        s.setValue(kK_ServerPort,    m_serverPortSpin->value());
+    if (m_serverPinEdit)
+        s.setValue(kK_ServerPin,     m_serverPinEdit->text().trimmed());
 }
 
 void SettingsDialog::load() {
@@ -821,6 +886,13 @@ void SettingsDialog::load() {
         m_repeatPenaltySpin->setValue(s.value(kK_RepeatPen).toDouble());
     if (s.contains(kK_MaxTokens))
         m_maxTokensSpin->setValue(s.value(kK_MaxTokens).toInt());
+    if (s.contains(kK_GpuLayers) && m_gpuLayersSpin)
+        m_gpuLayersSpin->setValue(s.value(kK_GpuLayers).toInt());
+    if (s.contains(kK_PromptTpl) && m_promptTemplateCombo) {
+        const int v = s.value(kK_PromptTpl).toInt();
+        const int idx = m_promptTemplateCombo->findData(v);
+        if (idx >= 0) m_promptTemplateCombo->setCurrentIndex(idx);
+    }
     if (s.contains(kK_SystemPrompt)) {
         const QString prompt = s.value(kK_SystemPrompt).toString();
         if (!prompt.isEmpty()) m_systemPromptEdit->setPlainText(prompt);
@@ -840,6 +912,16 @@ void SettingsDialog::load() {
         m_timestampsCheck->setChecked(s.value(kK_Timestamps).toBool());
     if (s.contains(kK_UserName))
         m_userNameEdit->setText(s.value(kK_UserName).toString());
+
+    if (m_serverEnableCheck)
+        m_serverEnableCheck->setChecked(
+            s.value(kK_ServerEnabled, false).toBool());
+    if (m_serverPortSpin)
+        m_serverPortSpin->setValue(
+            s.value(kK_ServerPort, 17320).toInt());
+    if (m_serverPinEdit)
+        m_serverPinEdit->setText(s.value(kK_ServerPin).toString());
+    refreshServerUrls();
 }
 
 // =============================================================================
@@ -855,6 +937,11 @@ LlamaWorkerThread::GenParams SettingsDialog::getGenParams() const {
     p.minP          = static_cast<float>(m_minPSpin->value());
     p.repeatPenalty = static_cast<float>(m_repeatPenaltySpin->value());
     p.maxTokens     = m_maxTokensSpin->value();
+    p.gpuLayers     = m_gpuLayersSpin ? m_gpuLayersSpin->value() : 99;
+    if (m_promptTemplateCombo) {
+        p.promptTemplate = static_cast<LlamaWorkerThread::PromptTemplate>(
+            m_promptTemplateCombo->currentData().toInt());
+    }
     return p;
 }
 
@@ -969,4 +1056,130 @@ void SettingsDialog::paintEvent(QPaintEvent* /*e*/) {
         stroke.setColorAt(1.0, QColor(47, 129, 247,   0));
         p.fillRect(QRectF(0, 0, r.width(), 1), stroke);
     }
+}
+
+// =============================================================================
+//  Server tab — LAN HTTP control panel for the phone
+// =============================================================================
+
+void SettingsDialog::buildServerTab(QWidget* tab) {
+    auto* col = new QVBoxLayout(tab);
+    col->setContentsMargins(4, 14, 14, 14);
+    col->setSpacing(12);
+
+    // ---- 1. Enable toggle ----
+    m_serverEnableCheck = new QCheckBox(
+        QStringLiteral("Запускати веб-сервер разом із JARVIS"), tab);
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Веб-керування з телефону"),
+        QStringLiteral("JARVIS підіймає міні-сервер у твоїй локальній мережі. "
+                       "З телефону, що в тій самій Wi-Fi, відкриваєш URL нижче "
+                       "і керуєш ПК у браузері."),
+        QString(),
+        m_serverEnableCheck, nullptr
+    }));
+
+    // ---- 2. Port ----
+    m_serverPortSpin = new QSpinBox(tab);
+    m_serverPortSpin->setRange(1024, 65535);
+    m_serverPortSpin->setValue(17320);
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Порт"),
+        QStringLiteral("За замовчуванням 17320. Зміни лише якщо порт зайнятий "
+                       "іншою програмою."),
+        QString(),
+        m_serverPortSpin, nullptr
+    }));
+
+    // ---- 3. PIN ----
+    m_serverPinEdit = new QLineEdit(tab);
+    m_serverPinEdit->setPlaceholderText(
+        QStringLiteral("(порожньо = без авторизації)"));
+    m_serverPinEdit->setClearButtonEnabled(true);
+    auto* genPinBtn = new QPushButton(QStringLiteral("Згенерувати"), tab);
+    genPinBtn->setCursor(Qt::PointingHandCursor);
+    connect(genPinBtn, &QPushButton::clicked, this, [this]() {
+        // 6-digit PIN — easy to type from a phone yet still ~1M permutations.
+        const quint32 v = QRandomGenerator::global()->bounded(1000000u);
+        m_serverPinEdit->setText(QString::asprintf("%06u", v));
+    });
+    auto* pinRow = new QHBoxLayout;
+    pinRow->setContentsMargins(0, 0, 0, 0);
+    pinRow->setSpacing(8);
+    pinRow->addWidget(m_serverPinEdit, 1);
+    pinRow->addWidget(genPinBtn, 0);
+    auto* pinHolder = new QWidget(tab);
+    pinHolder->setLayout(pinRow);
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("PIN-авторизація"),
+        QStringLiteral("Цифровий код, що його телефон надсилатиме в заголовку "
+                       "X-JARVIS-PIN. Якщо порожньо — будь-хто в LAN зможе "
+                       "керувати ПК. Рекомендую 6 цифр."),
+        QString(),
+        pinHolder, nullptr
+    }));
+
+    // ---- 4. URL preview + Open in browser ----
+    m_serverUrlsView = new QPlainTextEdit(tab);
+    m_serverUrlsView->setReadOnly(true);
+    m_serverUrlsView->setMinimumHeight(72);
+    m_serverUrlsView->setFrameShape(QFrame::NoFrame);
+    m_serverUrlsView->setStyleSheet(QStringLiteral(
+        "QPlainTextEdit {"
+        "  background: rgba(8,12,18,0.65);"
+        "  color: #58a6ff;"
+        "  border: 1px solid rgba(60,78,102,0.55);"
+        "  border-radius: 10px;"
+        "  padding: 10px 12px;"
+        "  font-family: 'Cascadia Mono','Consolas','Menlo',monospace;"
+        "  font-size: 12.5px;"
+        "}"));
+    auto* openBtn = new QPushButton(
+        QStringLiteral("Відкрити в браузері"), tab);
+    openBtn->setCursor(Qt::PointingHandCursor);
+    connect(openBtn, &QPushButton::clicked, this, [this]() {
+        const QStringList urls = JarvisHttpServer::lanUrls(
+            static_cast<quint16>(m_serverPortSpin
+                                 ? m_serverPortSpin->value() : 17320));
+        const QString first = urls.isEmpty()
+            ? QStringLiteral("http://127.0.0.1:%1").arg(
+                m_serverPortSpin ? m_serverPortSpin->value() : 17320)
+            : urls.first();
+        QDesktopServices::openUrl(QUrl(first));
+    });
+    auto* urlsHolder = new QWidget(tab);
+    auto* urlsLay    = new QVBoxLayout(urlsHolder);
+    urlsLay->setContentsMargins(0, 0, 0, 0);
+    urlsLay->setSpacing(8);
+    urlsLay->addWidget(m_serverUrlsView);
+    urlsLay->addWidget(openBtn, 0, Qt::AlignLeft);
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Адреси для телефону"),
+        QStringLiteral("Відкрий одну з цих адрес у браузері телефона (Wi-Fi "
+                       "тієї ж мережі). Список перебудовується при зміні "
+                       "порту або мережевих інтерфейсів."),
+        QString(),
+        urlsHolder, nullptr
+    }));
+
+    // Live updates as the user changes port/enable.
+    connect(m_serverPortSpin,
+            QOverload<int>::of(&QSpinBox::valueChanged),
+            this, [this](int) { refreshServerUrls(); });
+
+    col->addStretch();
+}
+
+void SettingsDialog::refreshServerUrls() {
+    if (!m_serverUrlsView) return;
+    const quint16 p = static_cast<quint16>(
+        m_serverPortSpin ? m_serverPortSpin->value() : 17320);
+    QStringList urls = JarvisHttpServer::lanUrls(p);
+    if (urls.isEmpty()) {
+        m_serverUrlsView->setPlainText(QStringLiteral(
+            "(не знайдено активних мережевих інтерфейсів IPv4 — "
+            "переконайся, що Wi-Fi/Ethernet увімкнено)"));
+        return;
+    }
+    m_serverUrlsView->setPlainText(urls.join('\n'));
 }
