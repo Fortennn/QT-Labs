@@ -45,7 +45,7 @@ QByteArray buildResponse(int code,
     r.append("Content-Length: ").append(QByteArray::number(body.size())).append("\r\n");
     r.append("Cache-Control: no-store\r\n");
     r.append("Access-Control-Allow-Origin: *\r\n");
-    r.append("Access-Control-Allow-Headers: Content-Type, X-JARVIS-PIN\r\n");
+    r.append("Access-Control-Allow-Headers: Content-Type, X-JARVIS-PIN, Authorization\r\n");
     r.append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
     r.append("Connection: ").append(keepAlive ? "keep-alive" : "close").append("\r\n");
     r.append("\r\n");
@@ -201,6 +201,10 @@ void JarvisHttpServer::onNewConnection() {
             // If this was the chat socket waiting for a reply, drop the
             // pending state so the next request can fly.
             if (m_webChatSocket == sock) m_webChatSocket = nullptr;
+            if (m_v1Socket == sock) {
+                m_v1Socket = nullptr;
+                m_v1ModelName.clear();
+            }
             m_pendings.remove(sock);
             sock->deleteLater();
         });
@@ -268,6 +272,14 @@ bool JarvisHttpServer::checkPin(const Pending& req) const {
     if (m_pin.isEmpty()) return true;
     const QByteArray header = req.headers.value("x-jarvis-pin");
     if (header == m_pin.toUtf8()) return true;
+    // OpenAI SDK / cURL convention: `Authorization: Bearer <pin>`. We accept
+    // the PIN as the Bearer token so third-party tools that already know
+    // how to talk to OpenAI work without modification.
+    const QByteArray auth = req.headers.value("authorization");
+    if (auth.startsWith("Bearer ")) {
+        const QByteArray tok = auth.mid(7).trimmed();
+        if (tok == m_pin.toUtf8()) return true;
+    }
     // ?pin= query fallback so the embedded HTML can pass it on first load.
     QUrl u = QUrl::fromEncoded("http://_" + req.path);
     const QString q = QUrlQuery(u).queryItemValue(QStringLiteral("pin"));
@@ -296,8 +308,10 @@ void JarvisHttpServer::handleRequest(QTcpSocket* sock, const Pending& req) {
         return;
     }
 
-    // Every /api/* is gated by PIN if set.
-    if (path.startsWith("/api/") && !checkPin(req)) {
+    // Every /api/* and /v1/* is gated by PIN if set.
+    if ((path.startsWith("/api/") || path.startsWith("/v1/"))
+        && !checkPin(req))
+    {
         writeError(sock, 401, QStringLiteral("PIN required"));
         sock->disconnectFromHost();
         return;
@@ -421,6 +435,80 @@ void JarvisHttpServer::handleRequest(QTcpSocket* sock, const Pending& req) {
         return;
     }
 
+    // =========================================================================
+    //  OpenAI-compatible endpoints
+    // =========================================================================
+
+    if (req.method == "GET" && path == "/v1/models") {
+        QJsonObject model;
+        model.insert(QStringLiteral("id"),
+                     m_ai ? m_ai->loadedModelName() : QStringLiteral("jarvis"));
+        model.insert(QStringLiteral("object"), QStringLiteral("model"));
+        model.insert(QStringLiteral("owned_by"), QStringLiteral("jarvis"));
+        model.insert(QStringLiteral("created"),
+                     QDateTime::currentSecsSinceEpoch());
+        QJsonObject root;
+        root.insert(QStringLiteral("object"), QStringLiteral("list"));
+        root.insert(QStringLiteral("data"), QJsonArray{ model });
+        writeJson(sock, 200,
+                  QJsonDocument(root).toJson(QJsonDocument::Compact));
+        sock->disconnectFromHost();
+        return;
+    }
+
+    if (req.method == "POST" && path == "/v1/chat/completions") {
+        if (m_v1Socket || m_webChatSocket) {
+            writeError(sock, 409,
+                       QStringLiteral("Another chat request is in flight"));
+            sock->disconnectFromHost();
+            return;
+        }
+        if (m_ai && m_ai->isBusy()) {
+            writeError(sock, 503,
+                       QStringLiteral("JARVIS is currently generating"));
+            sock->disconnectFromHost();
+            return;
+        }
+        const auto doc = QJsonDocument::fromJson(req.body);
+        if (!doc.isObject()) {
+            writeError(sock, 400, QStringLiteral("Expected JSON object"));
+            sock->disconnectFromHost();
+            return;
+        }
+        const QJsonObject body = doc.object();
+        // Flatten messages: we don't yet support a fully multi-turn flow on
+        // this transport, but we do honor a leading `system` message and
+        // join all `user` messages into a single prompt for now.
+        const QJsonArray msgs = body.value(QStringLiteral("messages"))
+                                     .toArray();
+        if (msgs.isEmpty()) {
+            writeError(sock, 400, QStringLiteral("messages[] is required"));
+            sock->disconnectFromHost();
+            return;
+        }
+        QString lastUser;
+        for (const QJsonValue& v : msgs) {
+            const QJsonObject m = v.toObject();
+            const QString role = m.value(QStringLiteral("role")).toString();
+            const QString c    = m.value(QStringLiteral("content")).toString();
+            if (role == QLatin1String("user")) lastUser = c;
+        }
+        if (lastUser.isEmpty()) {
+            writeError(sock, 400,
+                QStringLiteral("No user message found in messages[]"));
+            sock->disconnectFromHost();
+            return;
+        }
+        m_v1Socket = sock;
+        m_v1ModelName = body.value(QStringLiteral("model")).toString();
+        if (m_v1ModelName.isEmpty() && m_ai) {
+            m_v1ModelName = m_ai->loadedModelName();
+        }
+        emit webChatRequested(lastUser);
+        // Response comes later via completeWebChat() / failWebChat().
+        return;
+    }
+
     writeError(sock, 404, QStringLiteral("Not found"));
     sock->disconnectFromHost();
 }
@@ -430,6 +518,43 @@ void JarvisHttpServer::handleRequest(QTcpSocket* sock, const Pending& req) {
 // =============================================================================
 
 void JarvisHttpServer::completeWebChat(const QString& fullText) {
+    // OpenAI-compatible /v1/chat/completions takes priority (it was set
+    // last). If both sockets are somehow live we fall through to the phone
+    // socket after responding to /v1.
+    if (m_v1Socket) {
+        QJsonObject msg;
+        msg.insert(QStringLiteral("role"),    QStringLiteral("assistant"));
+        msg.insert(QStringLiteral("content"), fullText);
+        QJsonObject choice;
+        choice.insert(QStringLiteral("index"), 0);
+        choice.insert(QStringLiteral("message"), msg);
+        choice.insert(QStringLiteral("finish_reason"),
+                      QStringLiteral("stop"));
+        QJsonObject usage;
+        usage.insert(QStringLiteral("prompt_tokens"),     0);
+        usage.insert(QStringLiteral("completion_tokens"), 0);
+        usage.insert(QStringLiteral("total_tokens"),      0);
+        QJsonObject root;
+        root.insert(QStringLiteral("id"),
+            QStringLiteral("chatcmpl-jarvis-%1")
+                .arg(QDateTime::currentMSecsSinceEpoch()));
+        root.insert(QStringLiteral("object"),
+                    QStringLiteral("chat.completion"));
+        root.insert(QStringLiteral("created"),
+                    QDateTime::currentSecsSinceEpoch());
+        root.insert(QStringLiteral("model"),
+                    m_v1ModelName.isEmpty()
+                        ? QStringLiteral("jarvis")
+                        : m_v1ModelName);
+        root.insert(QStringLiteral("choices"),  QJsonArray{ choice });
+        root.insert(QStringLiteral("usage"),    usage);
+        writeJson(m_v1Socket, 200,
+                  QJsonDocument(root).toJson(QJsonDocument::Compact));
+        m_v1Socket->disconnectFromHost();
+        m_v1Socket = nullptr;
+        m_v1ModelName.clear();
+        return;
+    }
     if (!m_webChatSocket) return;
     QJsonObject reply;
     reply.insert(QStringLiteral("ok"), true);
@@ -441,6 +566,19 @@ void JarvisHttpServer::completeWebChat(const QString& fullText) {
 }
 
 void JarvisHttpServer::failWebChat(int httpCode, const QString& errorText) {
+    if (m_v1Socket) {
+        QJsonObject err;
+        err.insert(QStringLiteral("message"), errorText);
+        err.insert(QStringLiteral("type"),    QStringLiteral("server_error"));
+        QJsonObject root;
+        root.insert(QStringLiteral("error"), err);
+        writeJson(m_v1Socket, httpCode,
+                  QJsonDocument(root).toJson(QJsonDocument::Compact));
+        m_v1Socket->disconnectFromHost();
+        m_v1Socket = nullptr;
+        m_v1ModelName.clear();
+        return;
+    }
     if (!m_webChatSocket) return;
     writeError(m_webChatSocket, httpCode, errorText);
     m_webChatSocket->disconnectFromHost();

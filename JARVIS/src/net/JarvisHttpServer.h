@@ -19,12 +19,19 @@ QT_END_NAMESPACE
 // UI/AI access stays on the GUI thread.
 //
 // Endpoints (all JSON unless noted):
-//   GET  /                  -> embedded mobile-friendly HTML controller
-//   GET  /api/status        -> { online, model, generating, name, hasPin }
-//   POST /api/cmd           -> { ok, error? }   body: { cmd, ps:bool }
-//   POST /api/chat          -> { reply }        body: { message }
-//   GET  /api/buttons       -> [ {icon,label,cmd,ps,confirm}, ... ]
-//   POST /api/buttons       -> same array (replaces the saved set)
+//   GET  /                       -> embedded mobile-friendly HTML controller
+//   GET  /api/status             -> { online, model, generating, name, hasPin }
+//   POST /api/cmd                -> { ok, error? }   body: { cmd, ps:bool }
+//   POST /api/chat               -> { reply }        body: { message }
+//   GET  /api/buttons            -> [ {icon,label,cmd,ps,confirm}, ... ]
+//   POST /api/buttons            -> same array (replaces the saved set)
+//
+//   OpenAI-compatible (handy when scripting from cURL / SDK / 3rd-party
+//   tools that already know how to talk to ChatGPT):
+//   GET  /v1/models              -> { object:"list", data:[{ id, ... }] }
+//   POST /v1/chat/completions    -> standard OpenAI envelope.
+//                                   body: { model?, messages:[{role,content}], ... }
+//                                   non-streaming for simplicity.
 //
 // Auth (optional): if a PIN is configured, every /api/* call must include
 // the header `X-JARVIS-PIN: <pin>` (or query string ?pin=...). The PIN
@@ -117,6 +124,11 @@ private:
 
     // Socket waiting on /api/chat to be completed by MainWindow.
     QTcpSocket*                         m_webChatSocket = nullptr;
+    // Same idea for OpenAI-compatible /v1/chat/completions — when this is
+    // set we respond with the OpenAI envelope instead of the simple
+    // { reply: ... } JSON used by the phone UI.
+    QTcpSocket*                         m_v1Socket      = nullptr;
+    QString                             m_v1ModelName;     // echoed back in choices
 };
 
 #endif // JARVIS_HTTP_SERVER_H

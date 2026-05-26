@@ -57,11 +57,15 @@ private:
     void buildSamplingTab(QWidget* tab);
     void buildPersonaTab(QWidget* tab);
     void buildInterfaceTab(QWidget* tab);
+    void buildBackendTab(QWidget* tab);
     void buildServerTab(QWidget* tab);
 
     // Refresh the read-only LAN URL list and PIN preview based on the
     // current state of the server fields. Cheap; safe to call repeatedly.
     void refreshServerUrls();
+
+    // Launch ModelDownloadDialog and integrate the result into m_modelCombo.
+    void openDownloadDialog();
 
     // Model
     QComboBox*       m_modelCombo            = nullptr;
@@ -91,6 +95,13 @@ private:
     QSpinBox*        m_serverPortSpin        = nullptr;
     QLineEdit*       m_serverPinEdit         = nullptr;
     QPlainTextEdit*  m_serverUrlsView        = nullptr;
+
+    // Backend (Local llama.cpp vs remote OpenAI-compatible API)
+    QComboBox*       m_backendModeCombo      = nullptr;
+    QLineEdit*       m_apiEndpointEdit       = nullptr;
+    QLineEdit*       m_apiKeyEdit            = nullptr;
+    QLineEdit*       m_apiModelEdit          = nullptr;
+    QCheckBox*       m_apiStreamingCheck     = nullptr;
 };
 
 #endif // SETTINGSDIALOG_H

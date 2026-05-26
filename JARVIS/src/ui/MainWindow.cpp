@@ -307,6 +307,7 @@ QString defaultModelPath() {
     QStringList rootCandidates = {
         QDir::current().absoluteFilePath("models"),
         QDir(QCoreApplication::applicationDirPath()).absoluteFilePath("models"),
+        QDir(QCoreApplication::applicationDirPath()).absoluteFilePath("../models"),
     };
 
     for (const QString& rootPath : rootCandidates) {
@@ -323,7 +324,10 @@ QString defaultModelPath() {
         }
         return modelDir.absoluteFilePath(models.first());
     }
-    return QDir::current().absoluteFilePath("models/dolphin.gguf");
+    // Не знайдено жодного .gguf — повертаємо порожній рядок, щоб MainWindow
+    // показав баннер «модель не завантажена», а не пробував безглуздо
+    // вантажити неіснуючий dolphin.gguf і отримувати error popup.
+    return QString();
 }
 
 // ---------- Known-app resolution ------------------------------------------------------------
@@ -595,8 +599,11 @@ MainWindow::MainWindow(QWidget* parent)
     // 3. Build the polished side panel (header card + status + telemetry + Stop btn).
     buildSidebar();
 
-    // 4. AI worker thread
+    // 4. AI worker thread + remote API backend (lazy-initialized; both are
+    //    always allocated so signal connections live for the lifetime of
+    //    the window, but only the active one actually serves requests).
     aiThread = new LlamaWorkerThread(this);
+    m_apiBackend = new ApiChatWorker(this);
 
     // "Новий чат" — saves the current conversation to disk (if not empty)
     // and starts a fresh one.
@@ -609,13 +616,29 @@ MainWindow::MainWindow(QWidget* parent)
         SettingsDialog dlg(this);
         if (dlg.exec() != QDialog::Accepted) return;
 
-        aiThread->setGenParams(dlg.getGenParams());
+        // Push sampling/system prompt into BOTH backends — cheap, and means
+        // we don't have to re-apply after switching backends.
+        const auto gen = dlg.getGenParams();
+        aiThread->setGenParams(gen);
         aiThread->setSystemPromptOverride(dlg.getSystemPromptOverride());
+        if (m_apiBackend) {
+            m_apiBackend->setGenParams(gen);
+            m_apiBackend->setSystemPromptOverride(dlg.getSystemPromptOverride());
+        }
+
+        // Re-pick the active backend FIRST so subsequent queueLoadModel goes
+        // to the correct destination.
+        applyBackendPreferences();
+
         const QString model = dlg.getSelectedModel();
         if (!model.isEmpty()) {
             m_lastModelPath = model;
-            aiThread->queueLoadModel(model);
+            if (m_backend == Backend::LocalLlama) {
+                aiThread->queueLoadModel(model);
+            }
         }
+        // For Remote API, the model name comes from the API tab and is
+        // already pushed via applyBackendPreferences().
 
         // Apply visual prefs immediately + update user name + chip.
         const QString name = dlg.getUserName();
@@ -629,15 +652,24 @@ MainWindow::MainWindow(QWidget* parent)
         applyServerPreferences();
     });
 
+    // Local llama.cpp signals — emitted whenever aiThread streams tokens
+    // even if the user has switched to the remote API in the meantime. The
+    // backend guard in `updateAiStream` would be awkward, so instead we
+    // route through a lambda that drops out-of-backend traffic.
     connect(aiThread, &LlamaWorkerThread::tokenGenerated,
-            this, &MainWindow::updateAiStream, Qt::QueuedConnection);
+            this, [this](const QString& tok) {
+                if (m_backend != Backend::LocalLlama) return;
+                updateAiStream(tok);
+            }, Qt::QueuedConnection);
     connect(aiThread, &LlamaWorkerThread::replyFinished,
             this, [this](const QString& full) {
+                if (m_backend != Backend::LocalLlama) return;
                 onReplyFinished(full);
                 setGenerating(false);
             }, Qt::QueuedConnection);
 
     connect(aiThread, &LlamaWorkerThread::errorOccurred, this, [this](const QString& err) {
+        if (m_backend != Backend::LocalLlama) return;
         addMessage(QStringLiteral("ERROR: ") + err, false);
         setGenerating(false);
         // If a phone is parked on /api/chat, surface the error there too
@@ -649,6 +681,7 @@ MainWindow::MainWindow(QWidget* parent)
     }, Qt::QueuedConnection);
 
     connect(aiThread, &LlamaWorkerThread::modelLoaded, this, [this](bool success) {
+        if (m_backend != Backend::LocalLlama) return;  // signal is for the other backend
         if (!success) {
             if (sidebarStatusBig) sidebarStatusBig->setText(QStringLiteral("OFFLINE"));
             return;
@@ -657,10 +690,50 @@ MainWindow::MainWindow(QWidget* parent)
         if (sidebarModelLabel) {
             const QString p = m_lastModelPath.isEmpty() ? defaultModelPath()
                                                         : m_lastModelPath;
-            sidebarModelLabel->setText(QFileInfo(p).fileName());
+            sidebarModelLabel->setText(p.isEmpty() ? QStringLiteral("— не вибрано —")
+                                                   : QFileInfo(p).fileName());
         }
         if (sidebarStatusBig) sidebarStatusBig->setText(QStringLiteral("ONLINE"));
     }, Qt::QueuedConnection);
+
+    // ---- Remote API backend wires the same slots, gated by m_backend. ----
+    connect(m_apiBackend, &ApiChatWorker::tokenGenerated,
+            this, [this](const QString& tok) {
+                if (m_backend != Backend::RemoteApi) return;
+                updateAiStream(tok);
+            }, Qt::QueuedConnection);
+    connect(m_apiBackend, &ApiChatWorker::replyFinished,
+            this, [this](const QString& full) {
+                if (m_backend != Backend::RemoteApi) return;
+                onReplyFinished(full);
+                setGenerating(false);
+            }, Qt::QueuedConnection);
+    connect(m_apiBackend, &ApiChatWorker::errorOccurred,
+            this, [this](const QString& err) {
+                if (m_backend != Backend::RemoteApi) return;
+                addMessage(QStringLiteral("ERROR (API): ") + err, false);
+                setGenerating(false);
+                if (m_webChatPending && httpServer) {
+                    m_webChatPending = false;
+                    httpServer->failWebChat(500, err);
+                }
+            }, Qt::QueuedConnection);
+    connect(m_apiBackend, &ApiChatWorker::modelLoaded,
+            this, [this](bool success) {
+                if (m_backend != Backend::RemoteApi) return;
+                if (!success) {
+                    if (sidebarStatusBig)
+                        sidebarStatusBig->setText(QStringLiteral("OFFLINE"));
+                    return;
+                }
+                addMessage(QStringLiteral(
+                    "JARVIS API ONLINE (%1). Чим можу допомогти?")
+                    .arg(m_apiBackend->loadedModelName()), false);
+                if (sidebarModelLabel)
+                    sidebarModelLabel->setText(m_apiBackend->loadedModelName());
+                if (sidebarStatusBig)
+                    sidebarStatusBig->setText(QStringLiteral("ONLINE (API)"));
+            }, Qt::QueuedConnection);
 
     aiThread->setStackSize(16 * 1024 * 1024);
     aiThread->start();
@@ -1324,17 +1397,39 @@ void MainWindow::applyPersistedPreferences() {
         MessageWidget::setShowTimestamps(s.value("settings/showTimestamps").toBool());
     }
 
-    // ---- Model selection ----
-    QString modelToLoad;
-    if (s.contains(QStringLiteral("settings/modelPath"))) {
-        const QString p = s.value("settings/modelPath").toString();
-        if (!p.isEmpty() && QFileInfo::exists(p)) modelToLoad = p;
+    // ---- Backend selection (local llama.cpp vs remote API) ----
+    applyBackendPreferences();
+
+    if (m_backend == Backend::LocalLlama) {
+        // ---- Model selection ----
+        QString modelToLoad;
+        if (s.contains(QStringLiteral("settings/modelPath"))) {
+            const QString p = s.value("settings/modelPath").toString();
+            if (!p.isEmpty() && QFileInfo::exists(p)) modelToLoad = p;
+        }
+        if (modelToLoad.isEmpty()) modelToLoad = defaultModelPath();
+        if (aiThread && !modelToLoad.isEmpty()) {
+            m_lastModelPath = modelToLoad;
+            aiThread->queueLoadModel(modelToLoad);
+        } else {
+            // Жодного .gguf файла поряд — не падаємо у error popup, показуємо
+            // дружній стан «модель не вибрана». Користувач може натиснути
+            // Settings → «Завантажити…» щоб скачати модель.
+            if (sidebarStatusBig)
+                sidebarStatusBig->setText(QStringLiteral("NO MODEL"));
+            if (sidebarModelLabel)
+                sidebarModelLabel->setText(QStringLiteral("— не вибрано —"));
+            addMessage(
+                QStringLiteral(
+                    "JARVIS запущено, але GGUF-модель не знайдена. "
+                    "Відкрий «Налаштування» (зліва внизу) → «Завантажити…» "
+                    "щоб скачати модель з HuggingFace, або вкажи свій файл "
+                    "через «Огляд…»."),
+                /*isUser=*/false);
+        }
     }
-    if (modelToLoad.isEmpty()) modelToLoad = defaultModelPath();
-    if (aiThread && !modelToLoad.isEmpty()) {
-        m_lastModelPath = modelToLoad;
-        aiThread->queueLoadModel(modelToLoad);
-    }
+    // For Remote API, applyBackendPreferences() has already pushed model
+    // name into m_apiBackend and emitted modelLoaded asynchronously.
 }
 
 // Flip the Send button between idle (▶) and generating (◼). While generating,
@@ -1471,7 +1566,7 @@ void MainWindow::newChat(bool persistOld) {
         saveCurrentChat();
     }
 
-    if (aiThread) aiThread->clearHistory();
+    backendClearHistory();
     clearChatLayout();
     m_currentMessages.clear();
     m_currentAiText.clear();
@@ -1541,7 +1636,7 @@ void MainWindow::loadChatById(const QString& id) {
         saveCurrentChat();
     }
 
-    if (aiThread) aiThread->clearHistory();
+    backendClearHistory();
     clearChatLayout();
     m_currentMessages.clear();
     m_currentAiText.clear();
@@ -1597,7 +1692,7 @@ void MainWindow::openChatHistoryDialog() {
 void MainWindow::onUserInput() {
     // While generating, the Send button doubles as a Stop button.
     if (m_generating) {
-        if (aiThread) aiThread->stopGeneration();
+        backendStop();
         return;
     }
 
@@ -1611,7 +1706,7 @@ void MainWindow::onUserInput() {
     chatLayout->insertWidget(chatLayout->count() - 1, currentAiBubble);
     m_currentAiText.clear();
 
-    aiThread->queuePrompt(Config::SYSTEM_PROMPT, text);
+    backendQueuePrompt(Config::SYSTEM_PROMPT, text);
     setGenerating(true);
     scrollToBottom();
 }
@@ -2084,7 +2179,7 @@ void MainWindow::onWebChatRequested(const QString& message) {
         if (httpServer) httpServer->failWebChat(503, QStringLiteral("AI offline"));
         return;
     }
-    if (m_generating || aiThread->isBusy()) {
+    if (m_generating || backendIsBusy()) {
         if (httpServer)
             httpServer->failWebChat(503,
                 QStringLiteral("Зайнято — JARVIS зараз відповідає."));
@@ -2100,7 +2195,7 @@ void MainWindow::onWebChatRequested(const QString& message) {
     m_currentAiText.clear();
     m_webChatPending = true;
     setGenerating(true);
-    aiThread->queuePrompt(Config::SYSTEM_PROMPT, message);
+    backendQueuePrompt(Config::SYSTEM_PROMPT, message);
 }
 
 void MainWindow::onWebCommandRequested(const QString& cmd, bool isPowerShell) {
@@ -2118,6 +2213,73 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
     QMainWindow::keyPressEvent(event);
+}
+
+// =============================================================================
+//  Backend dispatch helpers
+// =============================================================================
+
+void MainWindow::applyBackendPreferences() {
+    QSettings s;
+    const QString mode = s.value(QStringLiteral("backend/mode"),
+                                 QStringLiteral("local")).toString();
+    const Backend prev = m_backend;
+    m_backend = (mode == QStringLiteral("api")) ? Backend::RemoteApi
+                                                : Backend::LocalLlama;
+
+    if (m_backend == Backend::RemoteApi && m_apiBackend) {
+        ApiChatWorker::Config cfg;
+        cfg.endpoint = s.value(QStringLiteral("backend/apiEndpoint"),
+            QStringLiteral("https://api.openai.com/v1")).toString();
+        cfg.apiKey   = s.value(QStringLiteral("backend/apiKey")).toString();
+        cfg.model    = s.value(QStringLiteral("backend/apiModel"),
+            QStringLiteral("gpt-4o-mini")).toString();
+        cfg.streaming = s.value(QStringLiteral("backend/apiStreaming"),
+                                true).toBool();
+        m_apiBackend->setConfig(cfg);
+        m_apiBackend->queueLoadModel(cfg.model);  // emits modelLoaded(true)
+        if (sidebarStatusBig)
+            sidebarStatusBig->setText(QStringLiteral("CONNECTING (API)"));
+    } else if (prev == Backend::RemoteApi && m_backend == Backend::LocalLlama) {
+        // Switched away from API. If the user already has a local model
+        // loaded the sidebar will catch up on next modelLoaded; otherwise
+        // mark the status until a model load is queued.
+        if (sidebarStatusBig)
+            sidebarStatusBig->setText(QStringLiteral("LOCAL"));
+    }
+}
+
+bool MainWindow::backendIsBusy() const {
+    if (m_backend == Backend::RemoteApi)
+        return m_apiBackend && m_apiBackend->isBusy();
+    return aiThread && aiThread->isBusy();
+}
+
+QString MainWindow::backendModelName() const {
+    if (m_backend == Backend::RemoteApi)
+        return m_apiBackend ? m_apiBackend->loadedModelName() : QString();
+    return aiThread ? aiThread->loadedModelName() : QString();
+}
+
+void MainWindow::backendQueuePrompt(const QString& system, const QString& user) {
+    if (m_backend == Backend::RemoteApi) {
+        if (m_apiBackend) m_apiBackend->queuePrompt(system, user);
+        return;
+    }
+    if (aiThread) aiThread->queuePrompt(system, user);
+}
+
+void MainWindow::backendStop() {
+    if (m_backend == Backend::RemoteApi) {
+        if (m_apiBackend) m_apiBackend->stopGeneration();
+        return;
+    }
+    if (aiThread) aiThread->stopGeneration();
+}
+
+void MainWindow::backendClearHistory() {
+    if (aiThread)     aiThread->clearHistory();
+    if (m_apiBackend) m_apiBackend->clearHistory();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

@@ -36,6 +36,7 @@
 
 #include "../ai/SystemPrompt.h"
 #include "../net/JarvisHttpServer.h"
+#include "ModelDownloadDialog.h"
 #include "WelcomeDialog.h"
 
 namespace {
@@ -285,6 +286,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     makeScrollableTab(&SettingsDialog::buildModelTab,     QStringLiteral("  Модель  "));
     makeScrollableTab(&SettingsDialog::buildSamplingTab,  QStringLiteral("  Семплінг  "));
     makeScrollableTab(&SettingsDialog::buildPersonaTab,   QStringLiteral("  Персона  "));
+    makeScrollableTab(&SettingsDialog::buildBackendTab,   QStringLiteral("  Бекенд  "));
     makeScrollableTab(&SettingsDialog::buildInterfaceTab, QStringLiteral("  Інтерфейс  "));
     makeScrollableTab(&SettingsDialog::buildServerTab,    QStringLiteral("  Сервер  "));
 
@@ -477,14 +479,21 @@ void SettingsDialog::buildModelTab(QWidget* tab) {
         auto* browse = new QPushButton(QStringLiteral("Огляд…"), row);
         browse->setCursor(Qt::PointingHandCursor);
 
+        auto* download = new QPushButton(QStringLiteral("Завантажити…"), row);
+        download->setCursor(Qt::PointingHandCursor);
+        download->setToolTip(QStringLiteral(
+            "Скачати GGUF-модель з HuggingFace одним кліком."));
+
         lay->addWidget(m_modelCombo, 1);
         lay->addWidget(browse);
+        lay->addWidget(download);
 
         col->addWidget(buildFieldCard(tab, FieldOptions{
             QStringLiteral("Файл моделі"),
             QStringLiteral("GGUF-файл, який JARVIS завантажує в пам'ять. "
                            "У списку — усе з теки ./models поряд із виконуваним "
-                           "файлом."),
+                           "файлом. Можеш натиснути «Завантажити…» — скачаєш "
+                           "одну з рекомендованих моделей прямо з HuggingFace."),
             QString(),  // no help button
             row,
             nullptr
@@ -503,6 +512,9 @@ void SettingsDialog::buildModelTab(QWidget* tab) {
             m_modelCombo->addItem(QFileInfo(file).fileName(), file);
             m_modelCombo->setCurrentIndex(m_modelCombo->count() - 1);
         });
+
+        connect(download, &QPushButton::clicked,
+                this, &SettingsDialog::openDownloadDialog);
     }
 
     // --- Context size card ---
@@ -831,6 +843,11 @@ void SettingsDialog::resetToDefaults() {
     if (m_serverEnableCheck) m_serverEnableCheck->setChecked(false);
     if (m_serverPortSpin)    m_serverPortSpin->setValue(17320);
     if (m_serverPinEdit)     m_serverPinEdit->clear();
+    if (m_backendModeCombo)  m_backendModeCombo->setCurrentIndex(0);
+    if (m_apiEndpointEdit)   m_apiEndpointEdit->setText(QStringLiteral("https://api.openai.com/v1"));
+    if (m_apiKeyEdit)        m_apiKeyEdit->clear();
+    if (m_apiModelEdit)      m_apiModelEdit->setText(QStringLiteral("gpt-4o-mini"));
+    if (m_apiStreamingCheck) m_apiStreamingCheck->setChecked(true);
     refreshServerUrls();
 }
 
@@ -857,6 +874,23 @@ void SettingsDialog::save() const {
         s.setValue(kK_ServerPort,    m_serverPortSpin->value());
     if (m_serverPinEdit)
         s.setValue(kK_ServerPin,     m_serverPinEdit->text().trimmed());
+
+    // ---- Backend (Local llama.cpp vs Remote OpenAI-compatible) ----
+    if (m_backendModeCombo)
+        s.setValue(QStringLiteral("backend/mode"),
+                   m_backendModeCombo->currentData().toString());
+    if (m_apiEndpointEdit)
+        s.setValue(QStringLiteral("backend/apiEndpoint"),
+                   m_apiEndpointEdit->text().trimmed());
+    if (m_apiKeyEdit)
+        s.setValue(QStringLiteral("backend/apiKey"),
+                   m_apiKeyEdit->text());
+    if (m_apiModelEdit)
+        s.setValue(QStringLiteral("backend/apiModel"),
+                   m_apiModelEdit->text().trimmed());
+    if (m_apiStreamingCheck)
+        s.setValue(QStringLiteral("backend/apiStreaming"),
+                   m_apiStreamingCheck->isChecked());
 }
 
 void SettingsDialog::load() {
@@ -921,6 +955,29 @@ void SettingsDialog::load() {
             s.value(kK_ServerPort, 17320).toInt());
     if (m_serverPinEdit)
         m_serverPinEdit->setText(s.value(kK_ServerPin).toString());
+
+    // ---- Backend ----
+    if (m_backendModeCombo) {
+        const QString mode = s.value(QStringLiteral("backend/mode"),
+                                     QStringLiteral("local")).toString();
+        const int idx = m_backendModeCombo->findData(mode);
+        if (idx >= 0) m_backendModeCombo->setCurrentIndex(idx);
+    }
+    if (m_apiEndpointEdit)
+        m_apiEndpointEdit->setText(
+            s.value(QStringLiteral("backend/apiEndpoint"),
+                    QStringLiteral("https://api.openai.com/v1")).toString());
+    if (m_apiKeyEdit)
+        m_apiKeyEdit->setText(
+            s.value(QStringLiteral("backend/apiKey")).toString());
+    if (m_apiModelEdit)
+        m_apiModelEdit->setText(
+            s.value(QStringLiteral("backend/apiModel"),
+                    QStringLiteral("gpt-4o-mini")).toString());
+    if (m_apiStreamingCheck)
+        m_apiStreamingCheck->setChecked(
+            s.value(QStringLiteral("backend/apiStreaming"), true).toBool());
+
     refreshServerUrls();
 }
 
@@ -1056,6 +1113,106 @@ void SettingsDialog::paintEvent(QPaintEvent* /*e*/) {
         stroke.setColorAt(1.0, QColor(47, 129, 247,   0));
         p.fillRect(QRectF(0, 0, r.width(), 1), stroke);
     }
+}
+
+// =============================================================================
+//  Backend tab — Local llama.cpp vs Remote OpenAI-compatible API
+// =============================================================================
+
+void SettingsDialog::buildBackendTab(QWidget* tab) {
+    auto* col = new QVBoxLayout(tab);
+    col->setContentsMargins(4, 14, 14, 14);
+    col->setSpacing(12);
+
+    // ---- Mode selector ----
+    m_backendModeCombo = new QComboBox(tab);
+    m_backendModeCombo->addItem(QStringLiteral("Локально (llama.cpp)"),
+                                QStringLiteral("local"));
+    m_backendModeCombo->addItem(QStringLiteral("Зовнішнє API (OpenAI-compatible)"),
+                                QStringLiteral("api"));
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Звідки брати відповіді"),
+        QStringLiteral("«Локально» — все рахується на твоєму ПК через "
+                       "llama.cpp + GGUF файл. «Зовнішнє API» — JARVIS "
+                       "ходить у HTTP-сервіс, що говорить мовою OpenAI "
+                       "(OpenAI, OpenRouter, Groq, Together, LM Studio, "
+                       "Ollama через /v1, llama-server та інші)."),
+        QString(),
+        m_backendModeCombo, nullptr
+    }));
+
+    // ---- API endpoint ----
+    m_apiEndpointEdit = new QLineEdit(tab);
+    m_apiEndpointEdit->setPlaceholderText(
+        QStringLiteral("https://api.openai.com/v1"));
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("URL ендпоінта (base)"),
+        QStringLiteral("Базова адреса з «/v1» наприкінці. Приклади:\n"
+                       "  • https://api.openai.com/v1\n"
+                       "  • https://openrouter.ai/api/v1\n"
+                       "  • https://api.groq.com/openai/v1\n"
+                       "  • http://localhost:11434/v1   (Ollama)\n"
+                       "  • http://localhost:1234/v1    (LM Studio)\n"
+                       "  • http://localhost:8080/v1    (llama-server)"),
+        QString(),
+        m_apiEndpointEdit, nullptr
+    }));
+
+    // ---- API key ----
+    m_apiKeyEdit = new QLineEdit(tab);
+    m_apiKeyEdit->setEchoMode(QLineEdit::Password);
+    m_apiKeyEdit->setPlaceholderText(QStringLiteral("sk-... (порожньо для локальних)"));
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("API key (Bearer-токен)"),
+        QStringLiteral("Надсилається у Authorization: Bearer <ключ>. "
+                       "Для локальних серверів (Ollama, LM Studio) часто "
+                       "не потрібен — лиши порожнім."),
+        QString(),
+        m_apiKeyEdit, nullptr
+    }));
+
+    // ---- Model name ----
+    m_apiModelEdit = new QLineEdit(tab);
+    m_apiModelEdit->setPlaceholderText(
+        QStringLiteral("gpt-4o-mini / llama-3.1-70b / qwen2.5:7b ..."));
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Назва моделі (model)"),
+        QStringLiteral("Що передавати у полі «model» запиту. Кожен сервіс має "
+                       "свій список (https://platform.openai.com/models, "
+                       "https://openrouter.ai/models тощо)."),
+        QString(),
+        m_apiModelEdit, nullptr
+    }));
+
+    // ---- Streaming toggle ----
+    m_apiStreamingCheck = new QCheckBox(
+        QStringLiteral("Стрімити токени в реальному часі (SSE)"), tab);
+    col->addWidget(buildFieldCard(tab, FieldOptions{
+        QStringLiteral("Streaming"),
+        QStringLiteral("Якщо сервіс підтримує Server-Sent Events — токени "
+                       "з'являтимуться по мірі генерації. Вимкни лише якщо "
+                       "сервер не вміє SSE (отримуєш помилки парсингу)."),
+        QString(),
+        m_apiStreamingCheck, nullptr
+    }));
+
+    col->addStretch();
+}
+
+void SettingsDialog::openDownloadDialog() {
+    ModelDownloadDialog dlg(this);
+    connect(&dlg, &ModelDownloadDialog::modelDownloaded,
+            this, [this](const QString& abs) {
+        // Додаємо новий файл у список і робимо його активним.
+        const int existing = m_modelCombo->findData(abs);
+        if (existing >= 0) {
+            m_modelCombo->setCurrentIndex(existing);
+        } else {
+            m_modelCombo->addItem(QFileInfo(abs).fileName(), abs);
+            m_modelCombo->setCurrentIndex(m_modelCombo->count() - 1);
+        }
+    });
+    dlg.exec();
 }
 
 // =============================================================================

@@ -7,6 +7,7 @@
 #include <QVector>
 
 #include "../ai/LlamaWorkerThread.h"
+#include "../ai/ApiChatWorker.h"
 
 QT_BEGIN_NAMESPACE
 class QCloseEvent;
@@ -119,9 +120,25 @@ private:
     void onWebChatRequested(const QString& message);
     void onWebCommandRequested(const QString& cmd, bool isPowerShell);
 
+    // Apply the currently-persisted backend choice (local llama.cpp vs
+    // remote OpenAI-compatible API) by reading QSettings and configuring
+    // m_apiBackend accordingly. Called on init + after Settings dialog.
+    void applyBackendPreferences();
+
+    // Тип активного бекенда. Визначає, куди йдуть промпти й сигнали.
+    enum class Backend { LocalLlama, RemoteApi };
+    Backend currentBackend() const { return m_backend; }
+    bool    backendIsBusy() const;
+    QString backendModelName() const;
+    void    backendQueuePrompt(const QString& system, const QString& user);
+    void    backendStop();
+    void    backendClearHistory();
+
     // ---- Members ----
     Ui::MainWindow*     ui              = nullptr;
     LlamaWorkerThread*  aiThread        = nullptr;
+    ApiChatWorker*      m_apiBackend    = nullptr;
+    Backend             m_backend       = Backend::LocalLlama;
     MessageWidget*      currentAiBubble = nullptr;
 
     // Manually managed chat widgets
