@@ -2,8 +2,21 @@
 JARVIS — Vision / Touchpad engine.
 
 Computer-vision powered virtual touchpad and gesture remote for the JARVIS
-desktop app. Drives the host PC via ``pyautogui`` (mouse / keyboard / scroll
-/ media keys).
+desktop app.  Drives the host PC via ``pyautogui`` (mouse / keyboard / scroll
+/ media keys) and forwards "macro" gestures to the JARVIS HTTP API on
+``http://127.0.0.1:<port>/api/cmd`` so the chat surface can react too.
+
+The script is launched indirectly by ``vision_launcher.py``, which guarantees
+that mediapipe, opencv, requests and pyautogui are available regardless of
+what the host PATH looks like.  See the top of ``vision_launcher.py`` and the
+matching root-cause comment in ``MainWindow::toggleCameraMode`` for the full
+story.
+
+Hot keys (while the camera window is focused):
+    q / Esc     — exit the engine
+    m           — toggle TOUCHPAD ↔ MACRO mode
+    h           — show / hide the on-screen legend
+    f           — toggle fullscreen
 """
 
 from __future__ import annotations
@@ -18,8 +31,9 @@ from collections import deque
 import cv2
 import mediapipe as mp
 import numpy as np
+import requests
 
-# pyautogui can fail to import on headless machines. Keep the rest of the
+# pyautogui can fail to import on headless machines.  Keep the rest of the
 # script usable as a "macro only" mode in that case so we still degrade
 # gracefully instead of hard-crashing.
 try:
@@ -35,7 +49,7 @@ except Exception as exc:  # noqa: BLE001
           flush=True)
 
 
-# ─── stdio plumbing ──────────────────────────────────────────────────────────────────────
+# ─── stdio plumbing ──────────────────────────────────────────────────────────
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
@@ -48,7 +62,13 @@ def log(msg: str) -> None:
     print(f"[JARVIS VISION] {msg}", flush=True)
 
 
-# ─── Args ──────────────────────────────────────────────────────────────────────
+# ─── Args ────────────────────────────────────────────────────────────────────
+# Strip the leading '--' if it was passed by a launcher (e.g. vision_launcher.py)
+# but not consumed there.  Argparse would otherwise treat it as the start of
+# positional arguments and fail.
+if len(sys.argv) > 1 and sys.argv[1] == "--":
+    sys.argv.pop(1)
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--port", type=int, default=17320,
                     help="JarvisHttpServer port (default matches MainWindow.cpp).")
@@ -62,6 +82,25 @@ parser.add_argument("--no-mirror", action="store_false", dest="mirror")
 parser.add_argument("--no-touchpad", action="store_true",
                     help="Start in MACRO-only mode (no mouse control).")
 args = parser.parse_args()
+
+JARVIS_URL = f"http://127.0.0.1:{args.port}/api/cmd"
+HEADERS = {"X-JARVIS-PIN": args.pin} if args.pin else {}
+
+
+def send_to_jarvis(cmd: str) -> None:
+    """Fire-and-forget POST to the JARVIS HTTP backend."""
+    try:
+        requests.post(
+            JARVIS_URL,
+            json={"cmd": cmd, "ps": False},
+            headers=HEADERS,
+            timeout=0.4,
+        )
+        log(f"CMD → {cmd}")
+    except Exception:
+        # Silently swallow: the HTTP server may be off if the user disabled
+        # the LAN panel — we still want the touchpad to work without it.
+        pass
 
 
 # ─── Graceful shutdown ───────────────────────────────────────────────────────
@@ -82,7 +121,7 @@ for _sig in (signal.SIGINT, signal.SIGTERM):
         pass
 
 
-# ─── Landmark constants ────────────────────────────────────────────────
+# ─── Landmark constants ──────────────────────────────────────────────────────
 FINGER_TIPS = [8, 12, 16, 20]
 FINGER_PIP  = [6, 10, 14, 18]
 
@@ -110,7 +149,7 @@ def thumb_extended(lm, hand_label: str) -> bool:
     return tip.x > base.x
 
 
-# ─── Gesture classifier ────────────────────────────────────────────────
+# ─── Gesture classifier ──────────────────────────────────────────────────────
 def classify_gesture(lm, hand_label: str) -> str | None:
     fingers = [finger_up(lm, t, p) for t, p in zip(FINGER_TIPS, FINGER_PIP)]
     thumb = thumb_extended(lm, hand_label)
@@ -123,24 +162,43 @@ def classify_gesture(lm, hand_label: str) -> str | None:
         return "FIST"
     if count == 4 and thumb:
         return "OPEN_HAND"
-    if idx and mid and not rng and not pnk:
-        return "PEACE"
+    if count == 4 and not thumb:
+        return "PALM"
     if idx and not mid and not rng and not pnk:
         return "POINT"
+    if idx and mid and not rng and not pnk:
+        return "PEACE"
+    if idx and mid and rng and not pnk:
+        return "THREE"
+    if idx and not mid and not rng and pnk:
+        return "CALL_ME"
+    if not idx and not mid and not rng and pnk:
+        return "PINKY"
     return None
 
 
-# ─── Gesture Labels in Ukrainian ────────────────────────────────────────────────
+# ─── Macro map (sent to JARVIS chat surface) ────────────────────────────────
+GESTURE_COMMANDS = {
+    "OPEN_HAND": "слухаю",
+    "FIST":      "стоп",
+    "THUMBS_UP": "добре",
+    "PINKY":     "пошук",
+    "CALL_ME":   "додому",
+}
 GESTURE_LABELS = {
-    "OPEN_HAND": ("Відкрита долоня", "рух курсору"),
-    "POINT":     ("Вказівний палець", "рух курсору"),
-    "FIST":      ("Кулак",           "лівий клік / утримання"),
-    "THUMBS_UP": ("Клас (вгору)",    "правий клік"),
-    "PEACE":     ("Жест Peace",      "прокрутка (скрол)"),
+    "OPEN_HAND": ("OPEN HAND", "слухаю"),
+    "FIST":      ("FIST",      "стоп"),
+    "THUMBS_UP": ("THUMBS UP", "добре"),
+    "POINT":     ("POINT",     "курсор / клік"),
+    "PEACE":     ("PEACE",     "скрол"),
+    "THREE":     ("THREE",     "гучніше / тихіше"),
+    "CALL_ME":   ("CALL ME",   "додому"),
+    "PINKY":     ("PINKY",     "пошук"),
+    "PALM":      ("PALM",      "пауза курсора"),
 }
 
 
-# ─── Palette ──────────────────────────────────────────────────────────────────────
+# ─── Palette ────────────────────────────────────────────────────────────────
 BG_PANEL        = (12, 14, 18)
 ACCENT          = (255, 198, 0)
 ACCENT_SOFT     = (255, 230, 110)
@@ -172,7 +230,7 @@ FINGER_COLORS = {
 }
 
 
-# ─── Drawing helpers ──────────────────────────────────────────────────
+# ─── Drawing helpers ────────────────────────────────────────────────────────
 def rounded_rect(img, p1, p2, color, radius=14, thickness=-1, alpha=1.0):
     """Filled rounded rectangle composited with optional alpha."""
     x1, y1 = p1
@@ -237,19 +295,19 @@ def draw_topbar(frame, mode_label, gesture_label, fps):
 
 def draw_legend(frame, mode):
     h, w = frame.shape[:2]
-    legend_w = 380
+    legend_w = 320
     legend_h = 32 + len(GESTURE_LABELS) * 22 + 20
     x1, y1 = w - legend_w - 16, h - legend_h - 16
     x2, y2 = w - 16, h - 16
     rounded_rect(frame, (x1, y1), (x2, y2), BG_PANEL, radius=16, alpha=0.78)
-    shadowed_text(frame, "ЛЕГЕНДА ЖЕСТІВ", (x1 + 16, y1 + 26), 0.50, ACCENT_SOFT, 1)
+    shadowed_text(frame, "ЛЕГЕНДА", (x1 + 16, y1 + 26), 0.50, ACCENT_SOFT, 1)
     for i, (gname, (head, tail)) in enumerate(GESTURE_LABELS.items()):
         row_y = y1 + 50 + i * 22
-        shadowed_text(frame, head, (x1 + 16, row_y), 0.44, TEXT, 1)
-        shadowed_text(frame, "→", (x1 + 160, row_y), 0.44, TEXT_FAINT, 1)
-        shadowed_text(frame, tail, (x1 + 180, row_y), 0.44, TEXT_DIM, 1)
+        shadowed_text(frame, head, (x1 + 16, row_y), 0.46, TEXT, 1)
+        shadowed_text(frame, "→", (x1 + 120, row_y), 0.46, TEXT_FAINT, 1)
+        shadowed_text(frame, tail, (x1 + 140, row_y), 0.46, TEXT_DIM, 1)
     # Mode hint
-    hint = "H: сховати легенду    Q / Esc: вихід"
+    hint = "M: TOUCHPAD ↔ MACRO    H: легенда    Q: вихід"
     shadowed_text(frame, hint, (16, h - 18), 0.42, TEXT_FAINT, 1)
 
 
@@ -264,22 +322,27 @@ def draw_cursor_overlay(frame, fingertip_px, click=False):
     cv2.line(frame, (x, y + 10), (x, y + 30), color, 2, cv2.LINE_AA)
 
 
-# ─── Touchpad state ──────────────────────────────────────────────────
+# ─── Touchpad state ─────────────────────────────────────────────────────────
 class Touchpad:
     """Translates landmark motion into mouse / scroll / click events.
 
-    Cursor movement:
-        Middle finger MCP knuckle (lm[9]) -> cursor coordinates.
-        This provides a highly stable point that does not jump when fingers
-        clench or open.
+    Cursor mode  (one hand visible, POINT gesture / index extended):
+        index fingertip → cursor.  Smoothed with an exponential moving avg.
 
-    Left Click / Drag : Hand clenches into a Fist (FIST).
-    Right Click       : Thumbs up (THUMBS_UP).
-    Scroll            : PEACE gesture. Vertical movement scrolls up/down.
+    Click (left)  : thumb-tip ↔ index-tip pinch < THRESHOLD.
+    Click (right) : thumb-tip ↔ middle-tip pinch < THRESHOLD.
+    Drag          : keep the left-pinch held while moving.
+    Scroll        : PEACE (index+middle up) — vertical motion of the midpoint
+                    is fed into pyautogui.scroll().
+    Volume / media: THREE — vertical motion ±band toggles volume up/down.
+    Pause cursor  : PALM (open hand without thumb).
     """
 
     SMOOTH_ALPHA       = 0.35      # 0..1, higher = snappier cursor.
+    PINCH_CLICK        = 0.055     # normalised landmark distance.
+    PINCH_RELEASE      = 0.090
     SCROLL_GAIN        = 800.0
+    VOLUME_BAND        = 0.04
     ACTIVE_BORDER_PCT  = 0.12      # ignore outer 12% so wrists at frame edge
                                    # don't slam the cursor into the corner.
 
@@ -287,6 +350,7 @@ class Touchpad:
         self.smoothed_x: float | None = None
         self.smoothed_y: float | None = None
         self.last_scroll_y: float | None = None
+        self.last_volume_y: float | None = None
         self.left_down = False
         self.right_down = False
 
@@ -309,17 +373,21 @@ class Touchpad:
 
     # ── primary update ──
     def update(self, lm, gesture: str | None) -> dict:
-        """Drive mouse / scroll given a single hand's landmarks."""
-        hint: dict = {"cursor_px": None, "click": False, "scroll": 0}
+        """Drive mouse / scroll given a single hand's landmarks.
+
+        Returns a small dict with rendering hints for the HUD.
+        """
+        hint: dict = {"cursor_px": None, "click": False, "scroll": 0, "volume": 0}
         if not PYAUTOGUI_OK:
             return hint
 
-        # Control point: base of the middle finger (knuckle)
-        ref_pt = lm[9]
+        idx_tip = lm[INDEX_TIP]
+        mid_tip = lm[MIDDLE_TIP]
+        thumb   = lm[THUMB_TIP]
 
         # ── PEACE → scroll ──
         if gesture == "PEACE":
-            cy = ref_pt.y
+            cy = (idx_tip.y + mid_tip.y) / 2
             if self.last_scroll_y is None:
                 self.last_scroll_y = cy
             dy = self.last_scroll_y - cy
@@ -332,31 +400,53 @@ class Touchpad:
             return hint
         self.last_scroll_y = None
 
-        # ── Normal cursor movement (Fist, Thumbs Up, or Open/Point) ──
-        sx, sy = self.smooth(ref_pt.x, ref_pt.y)
+        # ── THREE → volume rocker ──
+        if gesture == "THREE":
+            cy = idx_tip.y
+            if self.last_volume_y is None:
+                self.last_volume_y = cy
+            if cy < self.last_volume_y - self.VOLUME_BAND:
+                pyautogui.press("volumeup")
+                self.last_volume_y = cy
+                hint["volume"] = +1
+            elif cy > self.last_volume_y + self.VOLUME_BAND:
+                pyautogui.press("volumedown")
+                self.last_volume_y = cy
+                hint["volume"] = -1
+            self._release_clicks()
+            return hint
+        self.last_volume_y = None
+
+        # ── PALM → pause cursor entirely ──
+        if gesture == "PALM":
+            self._release_clicks()
+            return hint
+
+        # ── Cursor + pinch clicks ──
+        sx, sy = self.smooth(idx_tip.x, idx_tip.y)
         px, py = self.map_to_screen(sx, sy)
         pyautogui.moveTo(px, py, _pause=False)
-        hint["cursor_px"] = (ref_pt.x, ref_pt.y)
+        hint["cursor_px"] = (idx_tip.x, idx_tip.y)
 
-        # Handle mouse clicks
-        if gesture == "FIST":
-            if not self.left_down:
-                pyautogui.mouseDown(button="left", _pause=False)
-                self.left_down = True
+        # Left click on thumb ↔ index pinch.
+        d_left = dist(idx_tip, thumb)
+        if not self.left_down and d_left < self.PINCH_CLICK:
+            pyautogui.mouseDown(button="left", _pause=False)
+            self.left_down = True
             hint["click"] = True
-            if self.right_down:
-                pyautogui.mouseUp(button="right", _pause=False)
-                self.right_down = False
-        elif gesture == "THUMBS_UP":
-            if not self.right_down:
-                pyautogui.mouseDown(button="right", _pause=False)
-                self.right_down = True
+        elif self.left_down and d_left > self.PINCH_RELEASE:
+            pyautogui.mouseUp(button="left", _pause=False)
+            self.left_down = False
+
+        # Right click on thumb ↔ middle pinch.
+        d_right = dist(mid_tip, thumb)
+        if not self.right_down and d_right < self.PINCH_CLICK and not self.left_down:
+            pyautogui.mouseDown(button="right", _pause=False)
+            self.right_down = True
             hint["click"] = True
-            if self.left_down:
-                pyautogui.mouseUp(button="left", _pause=False)
-                self.left_down = False
-        else:
-            self._release_clicks()
+        elif self.right_down and d_right > self.PINCH_RELEASE:
+            pyautogui.mouseUp(button="right", _pause=False)
+            self.right_down = False
 
         return hint
 
@@ -374,7 +464,7 @@ class Touchpad:
         self._release_clicks()
 
 
-# ─── Init mediapipe + camera ───────────────────────────────────────────────────────
+# ─── Init mediapipe + camera ─────────────────────────────────────────────────
 log("Initialising MediaPipe Hand Tracking…")
 mp_hands = mp.solutions.hands
 hands_detector = mp_hands.Hands(
@@ -385,26 +475,10 @@ hands_detector = mp_hands.Hands(
 )
 
 log(f"Opening camera (index={args.camera})…")
-# On Windows prefer DirectShow (CAP_DSHOW) over the default MSMF backend.
-_cam_backends: list[int] = (
-    [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]
-    if sys.platform.startswith("win") else
-    [cv2.CAP_V4L2, cv2.CAP_ANY]
-)
-cap: cv2.VideoCapture | None = None
-for _backend in _cam_backends:
-    log(f"  trying backend {_backend}…")
-    _cap = cv2.VideoCapture(args.camera + _backend * 0, _backend)
-    if _cap.isOpened():
-        cap = _cap
-        log(f"Camera opened OK (backend={_backend}).")
-        break
-    _cap.release()
-
-if cap is None or not cap.isOpened():
-    log("ERROR: camera not found — жоден бекенд не зміг відкрити камеру. Перевір, що інша програма не зайняла камеру.")
+cap = cv2.VideoCapture(args.camera)
+if not cap.isOpened():
+    log("ERROR: camera not found. Перевір, що інша програма не зайняла камеру.")
     sys.exit(1)
-
 cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
@@ -417,6 +491,10 @@ show_legend   = True
 fullscreen    = False
 touchpad      = Touchpad()
 
+COOLDOWN          = 1.4
+last_macro_time   = 0.0
+last_macro_name   = None
+
 # FPS measured with a rolling window so it doesn't jitter.
 fps_window: deque[float] = deque(maxlen=30)
 prev_t = time.time()
@@ -424,23 +502,14 @@ prev_t = time.time()
 log(f"Touchpad mode: {'ON' if touchpad_mode else 'OFF'} | "
     f"screen={SCREEN_W}x{SCREEN_H} | "
     f"pyautogui={'ok' if PYAUTOGUI_OK else 'unavailable'}")
-log("JARVIS Vision active. Show your hands! Press 'q' to quit.")
+log("JARVIS Vision active. Show your hands! Press 'q' to quit, 'm' to toggle mode.")
 
 
-# ─── Main loop ─────────────────────────────────────────────────────────
-_read_fail_count = 0
-_MAX_READ_FAILS   = 60  # ~2 s at 30 fps before we give up
-
+# ─── Main loop ───────────────────────────────────────────────────────────────
 while cap.isOpened() and not _should_exit:
     ok, frame = cap.read()
     if not ok:
-        _read_fail_count += 1
-        if _read_fail_count >= _MAX_READ_FAILS:
-            log("ERROR: camera stopped delivering frames — виходжу.")
-            break
-        time.sleep(0.033)  # avoid busy-spin while waiting for camera to recover
         continue
-    _read_fail_count = 0
     if args.mirror:
         frame = cv2.flip(frame, 1)
     h, w = frame.shape[:2]
@@ -467,22 +536,31 @@ while cap.isOpened() and not _should_exit:
             if gesture and best_gesture is None:
                 best_gesture = gesture
 
-            # Touchpad runs off the first hand to avoid mouse-jitter.
-            if touchpad_mode:
+            # Touchpad runs only off the *first* recognised hand to avoid
+            # mouse-jitter when a second hand drifts into the frame.
+            if touchpad_mode and gesture in (None, "POINT", "PALM",
+                                             "PEACE", "THREE"):
                 hint = touchpad.update(lm, gesture)
                 if hint["cursor_px"] is not None:
                     cursor_px = hint["cursor_px"]
                 if hint["click"]:
                     click_now = True
 
-            active = gesture is not None
+            active = gesture is not None and (now - last_macro_time) < 0.4
             draw_skeleton(frame, lm, h, w, active=active)
     else:
         touchpad._release_clicks()
         touchpad.smoothed_x = touchpad.smoothed_y = None
 
-    # ── HUD ──────────────────────────────────────────────────────────────────────
-    mode_label = "ТАЧПАД"
+    # ── Macro dispatch ─────────────────────────────────────────────────────
+    if best_gesture in GESTURE_COMMANDS:
+        if (now - last_macro_time) >= COOLDOWN or best_gesture != last_macro_name:
+            send_to_jarvis(GESTURE_COMMANDS[best_gesture])
+            last_macro_time = now
+            last_macro_name = best_gesture
+
+    # ── HUD ────────────────────────────────────────────────────────────────
+    mode_label = "TOUCHPAD" if touchpad_mode else "MACRO"
     head_tail = GESTURE_LABELS.get(best_gesture) if best_gesture else None
     gesture_label = f"{head_tail[0]} · {head_tail[1]}" if head_tail else ""
     draw_topbar(frame, mode_label, gesture_label, fps)
@@ -490,14 +568,18 @@ while cap.isOpened() and not _should_exit:
         draw_legend(frame, mode_label)
     if touchpad_mode and cursor_px is not None:
         draw_cursor_overlay(frame,
-                             (int(cursor_px[0] * w), int(cursor_px[1] * h)),
-                             click=click_now)
+                            (int(cursor_px[0] * w), int(cursor_px[1] * h)),
+                            click=click_now)
 
     cv2.imshow(WINDOW, frame)
 
     key = cv2.waitKey(1) & 0xFF
     if key in (ord('q'), 27):
         break
+    if key == ord('m'):
+        touchpad_mode = not touchpad_mode
+        log(f"Touchpad mode: {'ON' if touchpad_mode else 'OFF'}")
+        touchpad._release_clicks()
     if key == ord('h'):
         show_legend = not show_legend
     if key == ord('f'):
@@ -513,7 +595,7 @@ while cap.isOpened() and not _should_exit:
         break
 
 
-# ─── Shutdown ──────────────────────────────────────────────────────────
+# ─── Shutdown ────────────────────────────────────────────────────────────────
 touchpad.shutdown()
 cap.release()
 cv2.destroyAllWindows()

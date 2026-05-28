@@ -782,8 +782,8 @@ MainWindow::~MainWindow() {
     }
     if (aiThread) {
         aiThread->stopGeneration();
-        delete aiThread;
-        aiThread = nullptr;
+        aiThread->quit();
+        aiThread->wait();
     }
     delete ui;
 }
@@ -2136,7 +2136,7 @@ void MainWindow::setupTrayIcon() {
     connect(hideAct, &QAction::triggered, this, &QWidget::hide);
     connect(quitAct, &QAction::triggered, this, [this]() {
         m_quitting = true;
-        close();
+        QCoreApplication::quit();
     });
 
     trayIcon->setContextMenu(menu);
@@ -2393,27 +2393,33 @@ QString findVisionSourceDir() {
     return QString();
 }
 
-// Probe a list of Python launcher candidates and return the program and
-// the arguments needed to launch it (e.g. ["py", "-3.11"]). Empty list means none worked.
-QStringList findHostPython() {
-    // Order matters: prefer the Python Launcher (`py`) on Windows because
-    // it gives the user a clean way to pick a specific minor version, and
-    // it's the canonical Microsoft-recommended launcher.
+struct PythonTarget {
+    QString program;
+    QStringList runArgs;
+    bool isEmpty() const { return program.isEmpty(); }
+};
+
+// Probe a list of Python launcher candidates and return the first one whose
+// `--version` exits 0.
+PythonTarget findHostPython() {
+    // Order matters: prefer specific versions known to be stable/working with camera deps (3.11, then 3.12, 3.10, etc.)
     struct Candidate {
         QString program;
         QStringList probeArgs;
-        QStringList launchArgs;
+        QStringList runArgs;
     };
     const QList<Candidate> candidates = {
 #ifdef Q_OS_WIN
-        {QStringLiteral("py"),       {QStringLiteral("-3.12"), QStringLiteral("--version")}, {QStringLiteral("-3.12")}},
         {QStringLiteral("py"),       {QStringLiteral("-3.11"), QStringLiteral("--version")}, {QStringLiteral("-3.11")}},
+        {QStringLiteral("py"),       {QStringLiteral("-3.12"), QStringLiteral("--version")}, {QStringLiteral("-3.12")}},
         {QStringLiteral("py"),       {QStringLiteral("-3.10"), QStringLiteral("--version")}, {QStringLiteral("-3.10")}},
+        {QStringLiteral("py"),       {QStringLiteral("-3.9"),  QStringLiteral("--version")}, {QStringLiteral("-3.9")}},
+        {QStringLiteral("py"),       {QStringLiteral("-3.8"),  QStringLiteral("--version")}, {QStringLiteral("-3.8")}},
         {QStringLiteral("py"),       {QStringLiteral("-3"),    QStringLiteral("--version")}, {QStringLiteral("-3")}},
-        {QStringLiteral("py"),       {QStringLiteral("--version")}, {}},
+        {QStringLiteral("py"),       {QStringLiteral("--version")},                          {}},
 #endif
-        {QStringLiteral("python3"),  {QStringLiteral("--version")}, {}},
-        {QStringLiteral("python"),   {QStringLiteral("--version")}, {}},
+        {QStringLiteral("python3"),  {QStringLiteral("--version")},                          {}},
+        {QStringLiteral("python"),   {QStringLiteral("--version")},                          {}},
     };
     for (const auto& cand : candidates) {
         QProcess probe;
@@ -2426,12 +2432,10 @@ QStringList findHostPython() {
             continue;
         }
         if (probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0) {
-            QStringList res;
-            res << cand.program << cand.launchArgs;
-            return res;
+            return {cand.program, cand.runArgs};
         }
     }
-    return QStringList();
+    return {QString(), {}};
 }
 
 } // namespace
@@ -2555,14 +2559,13 @@ void MainWindow::toggleCameraMode(bool enabled) {
         return;
     }
 
-    const QStringList hostPythonCmd = findHostPython();
-    if (hostPythonCmd.isEmpty()) {
+    const PythonTarget hostPython = findHostPython();
+    if (hostPython.isEmpty()) {
         appendSystemBubble(QStringLiteral(
             "⚠ Не знайшов Python на цій машині. Встанови Python 3.11+ з python.org "
             "або з Microsoft Store і повтори команду «камера»."));
         return;
     }
-    const QString hostPython = hostPythonCmd.first();
 
     // Match the JarvisHttpServer port/pin so the script can POST gesture
     // macros back to the chat surface. If the server is disabled, the script
@@ -2608,8 +2611,8 @@ void MainWindow::toggleCameraMode(bool enabled) {
     // We pass --port/--pin AFTER `--` so vision_launcher.py forwards them
     // verbatim to script.py (parse_known_args splits cleanly).
     QStringList finalArgs;
-    for (int i = 1; i < hostPythonCmd.size(); ++i) {
-        finalArgs << hostPythonCmd[i];
+    if (!hostPython.runArgs.isEmpty()) {
+        finalArgs << hostPython.runArgs;
     }
     finalArgs << visionDir + QStringLiteral("/vision_launcher.py");
     finalArgs << QStringLiteral("--venv") << venvRoot;
@@ -2666,12 +2669,12 @@ void MainWindow::toggleCameraMode(bool enabled) {
     appendSystemBubble(QStringLiteral(
         "▶ Запускаю режим камери… (перший раз JARVIS встановить mediapipe — "
         "це може зайняти 1–3 хвилини)."));
-    qDebug().noquote() << "[Vision] launching:" << hostPython << finalArgs.join(' ');
-    proc->start(hostPython, finalArgs);
+    qDebug().noquote() << "[Vision] launching:" << hostPython.program << finalArgs.join(' ');
+    proc->start(hostPython.program, finalArgs);
     if (!proc->waitForStarted(3000)) {
         appendSystemBubble(QStringLiteral(
             "⚠ Не вдалося запустити Python (%1). Перевір, що `%2` доступний у PATH.")
-            .arg(proc->errorString(), hostPython));
+            .arg(proc->errorString(), hostPython.program));
         proc->deleteLater();
         return;
     }
