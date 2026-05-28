@@ -29,6 +29,7 @@ class JarvisHttpServer;
 class MessageWidget;
 class ParticleBackground;
 class SettingsDialog;
+class QProcess;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -42,6 +43,7 @@ private slots:
     void updateAiStream(const QString& token);
     void onReplyFinished(const QString& fullResponse);
     void addMessage(const QString& text, bool isUser);
+    void onGestureDetected(const QString& gestureName);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -133,6 +135,24 @@ private:
     void    backendQueuePrompt(const QString& system, const QString& user);
     void    backendStop();
     void    backendClearHistory();
+
+    // ---- Camera / Gesture Mode (Python-based) ----
+    void toggleCameraMode(bool enabled);
+    // Try to match `text` against the camera-keyword regex; if matched,
+    // toggle the mode accordingly and return true so the caller can stop
+    // forwarding the text to the LLM.  Used both as a pre-LLM intercept
+    // in onUserInput() and inside handleSystemCommand().
+    bool tryHandleCameraKeyword(const QString& text);
+    // Refresh the side-panel camera button's label / colour so it reads
+    // "Камера: ВКЛ" while the engine is alive and dimmed otherwise.
+    void updateCameraButtonVisual();
+
+    bool m_cameraModeActive = false;
+    QProcess* m_gestureProcess = nullptr;
+    QPushButton* m_cameraButton = nullptr;
+
+    // ---- Wake Simulation ----
+    void onWakeActivation();
 
     // ---- Members ----
     Ui::MainWindow*     ui              = nullptr;

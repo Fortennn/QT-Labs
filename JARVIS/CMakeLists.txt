@@ -10,8 +10,8 @@ set(CMAKE_AUTORCC ON)
 # Обмежуємо паралельні завдання збірки щоб пк не зависал
 set(CMAKE_BUILD_PARALLEL_LEVEL 2)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Sql WebSockets)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets Network Sql WebSockets REQUIRED)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets Network Multimedia MultimediaWidgets)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Core Gui Widgets Network Multimedia MultimediaWidgets REQUIRED)
 
 include(FetchContent)
 
@@ -77,8 +77,8 @@ target_link_libraries(JARVIS PRIVATE
     Qt${QT_VERSION_MAJOR}::Gui
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
-    Qt${QT_VERSION_MAJOR}::Sql
-    Qt${QT_VERSION_MAJOR}::WebSockets
+    Qt${QT_VERSION_MAJOR}::Multimedia
+    Qt${QT_VERSION_MAJOR}::MultimediaWidgets
     "${LLAMA_BIN_DIR}/llama.dll"
 )
 
@@ -104,6 +104,25 @@ add_custom_command(TARGET JARVIS POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
         "$<TARGET_FILE_DIR:JARVIS>/assets/icon.png"
     COMMENT "Copying icon.png alongside executable..."
+)
+
+# ПІСЛЯ ЗБІРКИ: Копіюємо Python-частину рушія жестів (vision_launcher.py +
+# script.py + requirements.txt) у тек у "ai/" поруч з екзешником. MainWindow
+# шукає її через QCoreApplication::applicationDirPath() + "/ai/...".
+# Це дозволяє не залежати від робочої теки та працювати після windeployqt.
+add_custom_command(TARGET JARVIS POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:JARVIS>/ai"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/vision_launcher.py"
+        "$<TARGET_FILE_DIR:JARVIS>/ai/vision_launcher.py"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/script.py"
+        "$<TARGET_FILE_DIR:JARVIS>/ai/script.py"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/requirements.txt"
+        "$<TARGET_FILE_DIR:JARVIS>/ai/requirements.txt"
+    COMMENT "Copying JARVIS Vision Python engine alongside executable..."
 )
 
 # =============================================================================
@@ -161,7 +180,7 @@ if(WIN32)
     # каталог .exe. Підбираємо Debug-варіант (Qt6Coreed.dll) тільки якщо
     # він реально існує у Qt bin; інакше беремо Release (рятує випадок коли
     # людина встановила Qt без Debug-бібліотек).
-    foreach(_lib Core Gui Widgets Network Sql WebSockets)
+    foreach(_lib Core Gui Widgets Network Multimedia MultimediaWidgets)
         set(_rel "${_qt_bin_dir}/Qt${QT_VERSION_MAJOR}${_lib}.dll")
         set(_dbg "${_qt_bin_dir}/Qt${QT_VERSION_MAJOR}${_lib}d.dll")
         if(EXISTS "${_dbg}" AND EXISTS "${_rel}")
@@ -239,7 +258,19 @@ if(WIN32)
         )
     endif()
 
-    # -- (7) MinGW runtime DLLs (libgcc_s_seh-1.dll, libstdc++-6.dll, libwinpthread-1.dll) --
+    # -- (7) multimedia — для камери --
+    if(EXISTS "${_qt_root_dir}/plugins/multimedia")
+        add_custom_command(TARGET JARVIS POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:JARVIS>/multimedia"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${_qt_root_dir}/plugins/multimedia"
+                "$<TARGET_FILE_DIR:JARVIS>/multimedia"
+            COMMENT "Copying Qt multimedia plugins..."
+        )
+    endif()
+
+    # -- (8) MinGW runtime DLLs (libgcc_s_seh-1.dll, libstdc++-6.dll, libwinpthread-1.dll) --
     foreach(_mingw_dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)
         if(EXISTS "${_qt_bin_dir}/${_mingw_dll}")
             add_custom_command(TARGET JARVIS POST_BUILD
@@ -269,4 +300,11 @@ install(DIRECTORY "${LLAMA_BIN_DIR}/"
 )
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets"
     DESTINATION .
+)
+# Vision / Touchpad Python engine — лиш .py + .txt, без cache і venv.
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/vision_launcher.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/script.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/requirements.txt"
+    DESTINATION ai
 )

@@ -761,6 +761,19 @@ MainWindow::~MainWindow() {
     // Persist whatever the user typed before we tear everything down.
     saveCurrentChat();
 
+    // Stop the vision engine first so its OpenCV window doesn't linger
+    // after the main window vanishes (it owns the camera handle).
+    if (m_gestureProcess) {
+        m_gestureProcess->terminate();
+        if (!m_gestureProcess->waitForFinished(1500)) {
+            m_gestureProcess->kill();
+            m_gestureProcess->waitForFinished(500);
+        }
+        m_gestureProcess->deleteLater();
+        m_gestureProcess = nullptr;
+        m_cameraModeActive = false;
+    }
+
     if (httpServer) {
         httpServer->stop();
         // Owned-by-this; deleteLater lets pending socket events drain.
@@ -769,8 +782,8 @@ MainWindow::~MainWindow() {
     }
     if (aiThread) {
         aiThread->stopGeneration();
-        aiThread->quit();
-        aiThread->wait();
+        delete aiThread;
+        aiThread = nullptr;
     }
     delete ui;
 }
@@ -1222,6 +1235,27 @@ void MainWindow::buildSidebar() {
     }
     connect(btnExport, &QPushButton::clicked,
             this, &MainWindow::exportCurrentChatAsMarkdown);
+
+    // ---- 3c. "Камера / Тачпад" — toggles the vision engine (QProcess). ----
+    // Lives below export so the order is: Новий чат → Історія → Експорт → Камера.
+    // updateCameraButtonVisual() owns its stylesheet and label; it gets called
+    // from toggleCameraMode() on every state change, so the button always
+    // reflects whether the Python engine is currently alive.
+    m_cameraButton = new QPushButton(this);
+    m_cameraButton->setObjectName(QStringLiteral("btn_camera"));
+    m_cameraButton->setCursor(Qt::PointingHandCursor);
+    m_cameraButton->setMinimumHeight(36);
+    m_cameraButton->setToolTip(QStringLiteral(
+        "Увімкнути режим камери: курсор-палець, щипки = клік, скрол жестом PEACE.\n"
+        "Те саме можна викликати фразами «увімкни камеру» / «тачпад» у чаті."));
+    {
+        const int insertAt = ui->sideLayout->indexOf(btnExport) + 1;
+        ui->sideLayout->insertWidget(insertAt, m_cameraButton);
+    }
+    connect(m_cameraButton, &QPushButton::clicked, this, [this]() {
+        toggleCameraMode(!m_cameraModeActive);
+    });
+    updateCameraButtonVisual();
 
     // No standalone Stop button — the Send button morphs into Stop while
     // generating. See setGenerating().
@@ -1702,6 +1736,14 @@ void MainWindow::onUserInput() {
     appendUserMessage(text);
     inputField->clear();
 
+    // Pre-LLM intercept for the camera / touchpad keyword.  The model isn't
+    // 100% reliable at emitting `[CMD: camera]`, so we short-circuit before
+    // it ever sees the prompt.  Anything else falls through to the backend.
+    if (tryHandleCameraKeyword(text)) {
+        scrollToBottom();
+        return;
+    }
+
     currentAiBubble = new MessageWidget(QString(), /*isUser=*/false, this);
     chatLayout->insertWidget(chatLayout->count() - 1, currentAiBubble);
     m_currentAiText.clear();
@@ -1783,6 +1825,12 @@ void MainWindow::handleSystemCommand(const QString& shellCmd, bool isPowerShell)
     }
 
     // [CMD: ...] — try to be smart before falling back to cmd.exe.
+
+    // ---- 0. Camera / gesture / vision mode toggle ----
+    // Centralised in tryHandleCameraKeyword() so the SAME regex covers
+    // both the pre-LLM intercept in onUserInput() and the [CMD: camera]
+    // tag emitted by the model.
+    if (tryHandleCameraKeyword(trimmed)) return;
 
     // Pattern: open / start / launch / run <"target with spaces"|target> [extra args]
     static const QRegularExpression openRe(
@@ -2088,7 +2136,7 @@ void MainWindow::setupTrayIcon() {
     connect(hideAct, &QAction::triggered, this, &QWidget::hide);
     connect(quitAct, &QAction::triggered, this, [this]() {
         m_quitting = true;
-        QCoreApplication::quit();
+        close();
     });
 
     trayIcon->setContextMenu(menu);
@@ -2280,6 +2328,356 @@ void MainWindow::backendStop() {
 void MainWindow::backendClearHistory() {
     if (aiThread)     aiThread->clearHistory();
     if (m_apiBackend) m_apiBackend->clearHistory();
+}
+
+// =============================================================================
+//  Camera / Gesture (Touchpad) Mode  —  Python integration
+// =============================================================================
+//
+// Why this exists (and why every previous QProcess attempt failed):
+// --------------------------------------------------------------------------
+// QProcess does NOT inherit the user's interactive shell environment.  On
+// Windows it spawns the child with the *raw* Win32 environment block that
+// the GUI executable was launched with — meaning:
+//
+//   • `python` on PATH may resolve to a *different* interpreter than the
+//     one the user installed mediapipe into.  The Python Launcher (`py`)
+//     and the `python.exe` shim under %LOCALAPPDATA%\Microsoft\WindowsApps
+//     both forward to whatever the user double-clicked last.  QProcess sees
+//     neither of those decisions.
+//
+//   • `pip install --user` writes to %APPDATA%\Python\Python311\site-packages.
+//     If the user runs Python under a *different* user profile (e.g., from
+//     a service or admin shell) those packages are invisible.
+//
+//   • Even when the .exe and the interpreter share a user, the GUI process
+//     under `windeployqt` often inherits a stripped-down environment block
+//     (no APPDATA / no USERPROFILE) because Qt Creator launches it that way.
+//     Python silently picks an *empty* site-packages search path and every
+//     third-party import explodes with ModuleNotFoundError.
+//
+// The bulletproof fix is to stop depending on the system Python entirely:
+//   1. Find *any* working Python (we try `py -3.11`, `py -3`, `python3`,
+//      `python`, in that order — the first one to print its version wins).
+//   2. Use that interpreter to run `vision_launcher.py`, which creates a
+//      project-local venv under <AppLocalDataLocation>/jarvis-vision/.venv
+//      and pip-installs requirements.txt *into the venv*.
+//   3. The launcher then re-execs `script.py` with the venv's interpreter.
+//      That interpreter has a deterministic site-packages, so mediapipe,
+//      opencv, requests, and pyautogui are all guaranteed importable.
+//
+// We pass QProcessEnvironment::systemEnvironment() through so APPDATA /
+// LOCALAPPDATA / USERPROFILE / TEMP are all visible (necessary for pip's
+// cache and for the venv tooling to find a temp dir).  We also force
+// PYTHONIOENCODING=utf-8 + PYTHONUNBUFFERED=1 so cyrillic log lines round-
+// trip cleanly through QProcess's pipe.
+
+namespace {
+
+// Locate the project's Python source folder. Prefer the deployed copy that
+// CMake drops next to the .exe; fall back to ../src/ai when running from a
+// dev tree (e.g. Qt Creator's default build dir).
+QString findVisionSourceDir() {
+    const QString base = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        base + QStringLiteral("/ai"),
+        base + QStringLiteral("/../ai"),
+        base + QStringLiteral("/../src/ai"),
+        base + QStringLiteral("/../../src/ai"),
+        QDir::current().absoluteFilePath(QStringLiteral("src/ai")),
+    };
+    for (const QString& c : candidates) {
+        QFileInfo fi(c + QStringLiteral("/vision_launcher.py"));
+        if (fi.exists()) return QDir(c).absolutePath();
+    }
+    return QString();
+}
+
+// Probe a list of Python launcher candidates and return the program and
+// the arguments needed to launch it (e.g. ["py", "-3.11"]). Empty list means none worked.
+QStringList findHostPython() {
+    // Order matters: prefer the Python Launcher (`py`) on Windows because
+    // it gives the user a clean way to pick a specific minor version, and
+    // it's the canonical Microsoft-recommended launcher.
+    struct Candidate {
+        QString program;
+        QStringList probeArgs;
+        QStringList launchArgs;
+    };
+    const QList<Candidate> candidates = {
+#ifdef Q_OS_WIN
+        {QStringLiteral("py"),       {QStringLiteral("-3.12"), QStringLiteral("--version")}, {QStringLiteral("-3.12")}},
+        {QStringLiteral("py"),       {QStringLiteral("-3.11"), QStringLiteral("--version")}, {QStringLiteral("-3.11")}},
+        {QStringLiteral("py"),       {QStringLiteral("-3.10"), QStringLiteral("--version")}, {QStringLiteral("-3.10")}},
+        {QStringLiteral("py"),       {QStringLiteral("-3"),    QStringLiteral("--version")}, {QStringLiteral("-3")}},
+        {QStringLiteral("py"),       {QStringLiteral("--version")}, {}},
+#endif
+        {QStringLiteral("python3"),  {QStringLiteral("--version")}, {}},
+        {QStringLiteral("python"),   {QStringLiteral("--version")}, {}},
+    };
+    for (const auto& cand : candidates) {
+        QProcess probe;
+        probe.setProcessChannelMode(QProcess::MergedChannels);
+        probe.start(cand.program, cand.probeArgs);
+        if (!probe.waitForStarted(1500)) continue;
+        if (!probe.waitForFinished(2500)) {
+            probe.kill();
+            probe.waitForFinished(500);
+            continue;
+        }
+        if (probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0) {
+            QStringList res;
+            res << cand.program << cand.launchArgs;
+            return res;
+        }
+    }
+    return QStringList();
+}
+
+} // namespace
+
+bool MainWindow::tryHandleCameraKeyword(const QString& rawText) {
+    // Strip surrounding whitespace + optional [CMD:|cmd|вкл|вимкни] wrappers
+    // so phrases the user types in the chat ("увімкни камеру.") and tags
+    // the model emits (`[CMD: camera]`) both pass through the same regex.
+    const QString trimmed = rawText.trimmed();
+    if (trimmed.isEmpty()) return false;
+
+    // Verb-aware: explicit "увімкни / start / on" forces ON,
+    // "вимкни / stop / off" forces OFF, bare keyword toggles.
+    // The keyword body covers Ukrainian + English aliases.
+    static const QRegularExpression cameraRe(
+        QStringLiteral(R"_(^\s*(?:\[\s*cmd\s*:\s*)?(?P<verb>увімкни|вимкни|запусти|зупини|відкрий|закрий|stop|start|on|off|toggle|enable|disable)?\s*(?:camera|gesture|gestures|vision|touchpad|тачпад|камер[ауиеіою]*|жест[иіамиою]*|зір|очі)\s*\]?\s*[.!?,]?\s*$)_"),
+        QRegularExpression::CaseInsensitiveOption);
+
+    const auto m = cameraRe.match(trimmed);
+    if (!m.hasMatch()) return false;
+
+    const QString verb = m.captured(QStringLiteral("verb")).toLower();
+    bool wantOn;
+    if (verb == QLatin1String("увімкни") || verb == QLatin1String("запусти") ||
+        verb == QLatin1String("відкрий") || verb == QLatin1String("start")  ||
+        verb == QLatin1String("on")      || verb == QLatin1String("enable")) {
+        wantOn = true;
+    } else if (verb == QLatin1String("вимкни") || verb == QLatin1String("зупини") ||
+               verb == QLatin1String("закрий") || verb == QLatin1String("stop")   ||
+               verb == QLatin1String("off")    || verb == QLatin1String("disable")) {
+        wantOn = false;
+    } else {
+        wantOn = !m_cameraModeActive;
+    }
+    toggleCameraMode(wantOn);
+    return true;
+}
+
+void MainWindow::updateCameraButtonVisual() {
+    if (!m_cameraButton) return;
+    if (m_cameraModeActive) {
+        m_cameraButton->setText(QStringLiteral("🟢  Камера: ВКЛ"));
+        m_cameraButton->setStyleSheet(QStringLiteral(R"_(
+            QPushButton#btn_camera {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+                            stop:0 rgba(40,140,90,235),
+                            stop:1 rgba(20,90,60,235));
+                color: #ffffff;
+                border: 1px solid rgba(110, 230, 130, 200);
+                border-radius: 10px;
+                padding: 8px 14px;
+                font-size: 11.5px;
+                font-weight: 700;
+                letter-spacing: 0.6px;
+            }
+            QPushButton#btn_camera:hover { border-color: #ffffff; }
+        )_"));
+    } else {
+        m_cameraButton->setText(QStringLiteral("📷  Камера / Тачпад"));
+        m_cameraButton->setStyleSheet(QStringLiteral(R"_(
+            QPushButton#btn_camera {
+                background: rgba(20, 28, 40, 200);
+                color: #b6c4d8;
+                border: 1px solid rgba(60, 78, 102, 160);
+                border-radius: 10px;
+                padding: 8px 14px;
+                font-size: 11.5px;
+                font-weight: 600;
+                letter-spacing: 0.6px;
+            }
+            QPushButton#btn_camera:hover {
+                border-color: #2f81f7;
+                color: #ffffff;
+            }
+        )_"));
+    }
+}
+
+void MainWindow::onGestureDetected(const QString& gestureName) {
+    // Public slot — surfaces a gesture name as a system bubble in chat.
+    // Right now the vision engine POSTs gesture macros to /api/cmd, which
+    // routes through onWebCommandRequested → handleSystemCommand, so this
+    // slot is only invoked explicitly (e.g. by tests or future direct-
+    // signal wiring).  Keep the implementation minimal but real so MOC
+    // doesn't end up with an unresolved external.
+    if (gestureName.trimmed().isEmpty()) return;
+    appendSystemBubble(QStringLiteral("✋ Жест: %1").arg(gestureName));
+}
+
+void MainWindow::toggleCameraMode(bool enabled) {
+    if (enabled && m_cameraModeActive && m_gestureProcess) {
+        appendSystemBubble(QStringLiteral("Камера вже активна. Покажи долоню — або скажи «вимкни камеру»."));
+        return;
+    }
+
+    // ── OFF ─────────────────────────────────────────────────────────────────
+    if (!enabled) {
+        if (m_gestureProcess) {
+            appendSystemBubble(QStringLiteral("⏻ Вимикаю режим камери…"));
+            m_gestureProcess->terminate();
+            // Give the script a moment to release the camera handle cleanly
+            // (cv2.destroyAllWindows + cap.release), then kill if stubborn.
+            if (!m_gestureProcess->waitForFinished(1500)) {
+                m_gestureProcess->kill();
+                m_gestureProcess->waitForFinished(1000);
+            }
+            m_gestureProcess->deleteLater();
+            m_gestureProcess = nullptr;
+        }
+        m_cameraModeActive = false;
+        updateCameraButtonVisual();
+        return;
+    }
+
+    // ── ON ──────────────────────────────────────────────────────────────────
+    const QString visionDir = findVisionSourceDir();
+    if (visionDir.isEmpty()) {
+        appendSystemBubble(QStringLiteral(
+            "⚠ Не знайшов теку vision-скриптів. Очікую `ai/vision_launcher.py` "
+            "поруч з JARVIS.exe (CMake копіює її автоматично — перевір збірку)."));
+        return;
+    }
+
+    const QStringList hostPythonCmd = findHostPython();
+    if (hostPythonCmd.isEmpty()) {
+        appendSystemBubble(QStringLiteral(
+            "⚠ Не знайшов Python на цій машині. Встанови Python 3.11+ з python.org "
+            "або з Microsoft Store і повтори команду «камера»."));
+        return;
+    }
+    const QString hostPython = hostPythonCmd.first();
+
+    // Match the JarvisHttpServer port/pin so the script can POST gesture
+    // macros back to the chat surface. If the server is disabled, the script
+    // will still drive the touchpad — its requests just become no-ops.
+    QSettings s;
+    const quint16 port = static_cast<quint16>(
+        s.value(QStringLiteral("server/port"), 17320).toInt());
+    const QString pin = s.value(QStringLiteral("server/pin")).toString();
+
+    // Drop the venv inside AppLocalDataLocation so it survives reinstalls
+    // and doesn't pollute Program Files (which is typically read-only).
+    const QString venvRoot =
+        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)
+        + QStringLiteral("/jarvis-vision");
+    QDir().mkpath(venvRoot);
+
+    auto* proc = new QProcess(this);
+    proc->setProcessChannelMode(QProcess::MergedChannels);
+    proc->setWorkingDirectory(visionDir);
+
+    // Build env: start from the system env so pip can find APPDATA / TEMP /
+    // PROGRAMFILES, then layer on UTF-8 + unbuffered + the venv location so
+    // pythonw.exe / launchers don't accidentally cache the wrong site dir.
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("PYTHONIOENCODING"), QStringLiteral("utf-8"));
+    env.insert(QStringLiteral("PYTHONUNBUFFERED"), QStringLiteral("1"));
+    env.insert(QStringLiteral("PYTHONUTF8"),       QStringLiteral("1"));
+    // Defang any stale PYTHONHOME that ships with miniconda installs — Python
+    // refuses to import stdlib if PYTHONHOME points at a different version.
+    env.remove(QStringLiteral("PYTHONHOME"));
+    proc->setProcessEnvironment(env);
+
+#ifdef Q_OS_WIN
+    // CREATE_NO_WINDOW = 0x08000000 — suppresses the console flash when
+    // the host Python is a console build. The OpenCV window still appears
+    // (it's a real GUI window) so the user gets visual feedback.
+    proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) {
+        a->flags |= 0x08000000;
+    });
+#endif
+
+    // Argv: <host python> [-3.x] vision_launcher.py --venv <appdata/...> -- --port N --pin P
+    // We pass --port/--pin AFTER `--` so vision_launcher.py forwards them
+    // verbatim to script.py (parse_known_args splits cleanly).
+    QStringList finalArgs;
+    for (int i = 1; i < hostPythonCmd.size(); ++i) {
+        finalArgs << hostPythonCmd[i];
+    }
+    finalArgs << visionDir + QStringLiteral("/vision_launcher.py");
+    finalArgs << QStringLiteral("--venv") << venvRoot;
+    finalArgs << QStringLiteral("--");
+    finalArgs << QStringLiteral("--port") << QString::number(port);
+    if (!pin.isEmpty()) {
+        finalArgs << QStringLiteral("--pin") << pin;
+    }
+
+    connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc]() {
+        const QByteArray raw = proc->readAllStandardOutput();
+        QString chunk = QString::fromUtf8(raw);
+        for (const QString& rawLine : chunk.split(QChar('\n'))) {
+            const QString line = rawLine.trimmed();
+            if (line.isEmpty()) continue;
+            // Throttle: only surface "interesting" lines as bubbles. Pure
+            // FPS/CMD spam goes to the qDebug log instead so the chat
+            // doesn't drown.
+            if (line.startsWith(QLatin1String("[VENV]")) ||
+                line.contains(QLatin1String("ERROR"), Qt::CaseInsensitive) ||
+                line.contains(QLatin1String("⚠")) ||
+                line.contains(QLatin1String("Vision engine")) ||
+                line.contains(QLatin1String("active"), Qt::CaseInsensitive)) {
+                appendSystemBubble(line);
+            }
+            qDebug().noquote() << "[Vision/py]" << line;
+        }
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError) {
+        appendSystemBubble(QStringLiteral("⚠ QProcess error: %1")
+                               .arg(proc->errorString()));
+    });
+    connect(proc,
+            QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this,
+            [this](int exitCode, QProcess::ExitStatus status) {
+        m_cameraModeActive = false;
+        if (m_gestureProcess) {
+            m_gestureProcess->deleteLater();
+            m_gestureProcess = nullptr;
+        }
+        if (status == QProcess::CrashExit) {
+            appendSystemBubble(QStringLiteral(
+                "✗ Vision engine впав (signal). Перевір лог."));
+        } else if (exitCode != 0) {
+            appendSystemBubble(QStringLiteral(
+                "✗ Vision engine завершився з кодом %1.").arg(exitCode));
+        } else {
+            appendSystemBubble(QStringLiteral("✓ Vision engine зупинено."));
+        }
+        updateCameraButtonVisual();
+    });
+
+    appendSystemBubble(QStringLiteral(
+        "▶ Запускаю режим камери… (перший раз JARVIS встановить mediapipe — "
+        "це може зайняти 1–3 хвилини)."));
+    qDebug().noquote() << "[Vision] launching:" << hostPython << finalArgs.join(' ');
+    proc->start(hostPython, finalArgs);
+    if (!proc->waitForStarted(3000)) {
+        appendSystemBubble(QStringLiteral(
+            "⚠ Не вдалося запустити Python (%1). Перевір, що `%2` доступний у PATH.")
+            .arg(proc->errorString(), hostPython));
+        proc->deleteLater();
+        return;
+    }
+    m_gestureProcess   = proc;
+    m_cameraModeActive = true;
+    updateCameraButtonVisual();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

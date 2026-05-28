@@ -99,8 +99,8 @@ bool LlamaWorkerThread::loadModel(const QString& modelPath) {
     auto cparams = llama_context_default_params();
     cparams.n_ctx = static_cast<uint32_t>(contextSize);
     cparams.n_batch = static_cast<uint32_t>(contextSize); // Повинно бути >= максимальній довжині промпту
-    // Використовуємо всі доступні ядра CPU
-    int cpuThreads = QThread::idealThreadCount();
+    // Використовуємо оптимальну кількість потоків, залишаючи 2 для системи та жестів
+    int cpuThreads = qMax(1, QThread::idealThreadCount() - 2);
     qDebug() << "[JARVIS CORE] Використовую потоків:" << cpuThreads;
     cparams.n_threads = cpuThreads;
     cparams.n_threads_batch = cpuThreads;

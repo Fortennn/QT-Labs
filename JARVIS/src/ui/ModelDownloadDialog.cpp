@@ -109,25 +109,9 @@ ModelDownloadDialog::builtinCatalog() {
 }
 
 QString ModelDownloadDialog::defaultDownloadDir() {
-    const QString primary = QDir(QCoreApplication::applicationDirPath())
-                                .absoluteFilePath(QStringLiteral("models"));
-    QDir d(primary);
-    if (!d.exists()) {
-        QDir().mkpath(primary);
-    }
-    // Перевіряємо writability через створення тимчасового файла.
-    QFile probe(primary + QStringLiteral("/.write-probe"));
-    if (probe.open(QIODevice::WriteOnly)) {
-        probe.close();
-        probe.remove();
-        return primary;
-    }
-    // Fallback: AppData / XDG.
-    const QString appData = QStandardPaths::writableLocation(
-        QStandardPaths::AppDataLocation);
-    const QString fallback = appData + QStringLiteral("/models");
-    QDir().mkpath(fallback);
-    return fallback;
+    const QString primary = QCoreApplication::applicationDirPath() + QStringLiteral("/models");
+    QDir().mkpath(primary);
+    return primary;
 }
 
 ModelDownloadDialog::ModelDownloadDialog(QWidget* parent)
@@ -260,6 +244,7 @@ void ModelDownloadDialog::resetUi() {
 
 void ModelDownloadDialog::cancelActive() {
     if (m_reply) {
+        m_reply->disconnect();
         m_reply->abort();
         m_reply->deleteLater();
         m_reply = nullptr;

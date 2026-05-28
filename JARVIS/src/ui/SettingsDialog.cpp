@@ -325,6 +325,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
         QDialog { background: transparent; color: #e6edf3; }
         QLabel  { color: #d1d7df; font-size: 13px; background: transparent; }
 
+        QTabWidget { background: transparent; }
         QTabWidget::pane {
             border: 1px solid rgba(35, 50, 72, 220);
             border-radius: 14px;
@@ -333,6 +334,8 @@ SettingsDialog::SettingsDialog(QWidget* parent)
                 stop:0 rgba(8, 17, 28, 175),
                 stop:1 rgba(6, 10, 18, 215));
         }
+        QTabWidget::tab-bar { alignment: left; background: transparent; }
+        QTabBar { background: transparent; }
         QTabBar::tab {
             color: #8a99b1;
             background: transparent;

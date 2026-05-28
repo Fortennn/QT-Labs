@@ -1,0 +1,22 @@
+# JARVIS Vision / Touchpad engine dependencies.
+# Auto-installed by vision_launcher.py into a project-local virtual environment
+# (NOT into the user's global Python).  Versions are pinned to the latest
+# release line known to work together on Python 3.11–3.14 on Windows.
+#
+# ⚠ ВАЖЛИВО — numpy:
+#   numpy 1.x на Python 3.14 (py launcher default) збирається через MINGW-W64
+#   і гарантовано крашиться (сигнал).  numpy 2.x має нормальні wheels для 3.14.
+#   НЕ міняти нижню межу на <2.0 — це поверне MINGW-crash.
+#
+# ⚠ mediapipe:
+#   Версія 0.10.21 більше не існує на PyPI (видалена).
+#   Використовуємо >= щоб pip сам знайшов актуальну.
+
+mediapipe>=0.10.30
+opencv-python>=4.10.0.84
+numpy>=2.0.0,<2.3
+requests>=2.31
+pyautogui>=0.9.54
+# pyautogui's Windows mouse-button backend (used implicitly).
+# Only pulled in on Windows; pip on other OSes will skip it silently.
+pywin32>=306; sys_platform == "win32"

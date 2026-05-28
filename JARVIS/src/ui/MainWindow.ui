@@ -98,14 +98,14 @@ QLabel {
        <item>
         <widget class="QPushButton" name="btn_clear">
          <property name="text">
-          <string>Clear Memory</string>
+          <string>Очистити пам'ять</string>
          </property>
         </widget>
        </item>
        <item>
         <widget class="QPushButton" name="btn_settings">
          <property name="text">
-          <string>Settings</string>
+          <string>Налаштування</string>
          </property>
         </widget>
        </item>
@@ -119,7 +119,7 @@ QLabel {
        <item>
         <widget class="QLabel" name="label_status">
          <property name="text">
-          <string>SYSTEM STATUS: ONLINE</string>
+          <string>СТАТУС СИСТЕМИ: ОНЛАЙН</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignCenter</set>
